@@ -8,8 +8,8 @@ meters_state.json
 # Ablesewerte-CSVs und immocloud-Exporte (exports/ Ordner, lokal behalten)
 exports/
 
-# Generierte Konfiguration (enthält Mieternamen)
-heizkosten_rechner/heizkosten_config.yaml
+# Generierte Konfiguration, Ergebnis und PDFs (output/ Ordner, lokal behalten)
+heizkosten_rechner/output/
 
 # Python
 __pycache__/

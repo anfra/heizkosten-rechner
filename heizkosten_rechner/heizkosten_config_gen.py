@@ -310,6 +310,7 @@ def write_config(config: dict, out_path: Path) -> None:
         "  warmwasser_grundkosten_pct: 30   # Anteil Grundkosten Warmwasser in %",
     ]
 
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"\n✓ Konfiguration geschrieben: {out_path}")
 
@@ -326,12 +327,13 @@ def main() -> None:
     parser.add_argument("--jahr",  type=int, default=2025, help="Abrechnungsjahr (Standard: 2025)")
     parser.add_argument("--csv",   default=None,
                         help="Pfad zur Ablesewerte-CSV (optional, f\u00fcr sp\u00e4tere Erweiterung)")
-    parser.add_argument("--out",   default="heizkosten_config.yaml",
-                        help="Ausgabedatei (Standard: heizkosten_config.yaml)")
+    parser.add_argument("--out",   default=None,
+                        help="Ausgabedatei (Standard: output/heizkosten_config.yaml neben diesem Skript)")
     args = parser.parse_args()
 
     xlsx_path = Path(args.xlsx)
-    out_path  = Path(args.out)
+    base      = Path(__file__).resolve().parent
+    out_path  = Path(args.out) if args.out else base / "output" / "heizkosten_config.yaml"
 
     if not xlsx_path.exists():
         print(f"Fehler: Datei nicht gefunden: {xlsx_path}")

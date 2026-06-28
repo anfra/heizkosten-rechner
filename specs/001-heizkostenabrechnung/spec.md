@@ -1,6 +1,6 @@
 # Spec 001 — Heizkostenabrechnung nach HeizkostenV
 
-**Status:** Draft  
+**Status:** In Progress — Phase 2 + Tests abgeschlossen  
 **Erstellt:** 2026-06-28  
 **Objekt:** Zaschendorfer Str. 20, Meißen  
 **Abrechnungsjahr:** 2025  
@@ -75,16 +75,18 @@ Nutzeinheit ; Stockwerk ; Lage ; Raum ; Geräte-Nr ; Typ ; Einbau ; Ausbau ;
 
 ### 2.3 Nutzeinheiten
 
-| NE | Bezeichnung       | Fläche (m²) |
-|----|-------------------|-------------|
-| 1  | 20 - EG links     | *zu erfassen* |
-| 2  | 10 - EG rechts    | *zu erfassen* |
-| 3  | 40 - 1.OG links   | *zu erfassen* |
-| 4  | 30 - 1.OG rechts  | *zu erfassen* |
-| 5  | 60 - 2.OG links   | *zu erfassen* |
-| 6  | 50 - 2.OG rechts  | *zu erfassen* |
-| 7  | 80 - DG links     | *zu erfassen* |
-| 8  | 70 - DG rechts    | *zu erfassen* |
+| NE | Bezeichnung       | Fläche (m²) | Aktueller Mieter (2025) |
+|----|-------------------|-------------|-------------------------|
+| 1  | 20 - EG links     | 50,40       | Jennifer Rose Gombár (bis 30.04.) / Dirk Hamm (ab 15.07.) |
+| 2  | 10 - EG rechts    | 50,72       | Ilona Thiele |
+| 3  | 40 - 1.OG links   | 50,40       | Leonie-Luna Fischer |
+| 4  | 30 - 1.OG rechts  | 50,72       | Lena-Marie Mank |
+| 5  | 60 - 2.OG links   | 50,40       | Christian Fürschke (bis 31.05.) / Leerstand / Robert Sukanik (ab 15.08.) / Marek Ziga (ab 01.11.) |
+| 6  | 50 - 2.OG rechts  | 50,72       | Sandra Haschke |
+| 7  | 80 - DG links     | 41,13       | Alexander Otto |
+| 8  | 70 - DG rechts    | 57,69       | Uwe Schlegel |
+
+**Gesamt:** 402,18 m²
 
 ---
 
@@ -297,7 +299,7 @@ Die Applikation besteht aus **vier unabhängigen Werkzeugen**, die sequenziell a
 ┌────────▼────────────┐  ┌─────▼───────────────────────────────┐
 │ 3. heizkosten_      │  │ 4. heizkosten_pdf.py                │
 │    immocloud_       │  │    Input:  heizkosten_ergebnis.yaml  │
-│    export.py        │  │    Output: BKA_<Mieter>.pdf je Mieter│
+│    export.py        │  │    Output: Heizk_<Mieter>.pdf je Mieter│
 │    Input: Ergebnis  │  │    → Versand-fertige Abrechnung      │
 │    Output: EUR-     │  │      (eigenständiges PDF, kein       │
 │    Betrag in        │  │      (nur Heizung + Warmwasser)      │
@@ -499,7 +501,7 @@ Nebenkostenabrechnung gegenüber dem Mieter (inkl. Kaltwasser, Versicherung, etc
 
 ### 8.2 Heizkostenabrechnung PDF (Mieterversand)
 
-Zusätzlich wird je Mieter ein PDF erzeugt (`BKA_<Jahr>_<Vorname>_<Nachname>.pdf`),
+Zusätzlich wird je Mieter ein PDF erzeugt (`Heizk_<Jahr>_<Vorname>_<Nachname>.pdf`),
 das die **detaillierte Aufschlüsselung der Heizkosten und Warmwasserkosten** enthält
 nach den Anforderungen des § 6 Abs. 4 HeizkostenV. Dieses PDF wird direkt an den
 Mieter verschickt.
@@ -527,7 +529,7 @@ ergebnis:
         warmwasser_gesamt_eur:          48.10
         co2_mieter_eur:                  8.20
         summe_eur:                     198.60
-        pdf_datei: "BKA_2025_Jennifer_Rose_Gombar.pdf"
+        pdf_datei: "Heizk_2025_Jennifer_Rose_Gombar.pdf"
       - name:         "Dirk Hamm"
         periode_von:  "2025-07-15"
         periode_bis:  "2025-12-31"
@@ -542,7 +544,7 @@ ergebnis:
         warmwasser_gesamt_eur:          57.90
         co2_mieter_eur:                  9.80
         summe_eur:                     236.10
-        pdf_datei: "BKA_2025_Dirk_Hamm.pdf"
+        pdf_datei: "Heizk_2025_Dirk_Hamm.pdf"
     leerstand:
       - periode_von: "2025-05-01"
         periode_bis:  "2025-07-14"
@@ -591,21 +593,21 @@ Abrechnung rechtskonform erstellen kann:
 - [x] XLSX-Import aus immocloud-Objektexport
 - [x] Wohnflächen automatisch extrahiert (402,18 m² gesamt)
 - [x] Mieter mit Einzug/Auszug korrekt erkannt (inkl. Mieterwechsel)
-- [ ] Lücken zwischen Mietern als "Leerstand"-Periode kennzeichnen
-- [ ] Energiekosten aus der Versorger-Rechnung eintragen
+- [x] Lücken zwischen Mietern als "Leerstand"-Periode kennzeichnen (implementiert in `heizkosten_calc.py` → `build_periods()`)
+- [x] Energiekosten aus der Versorger-Rechnung eintragen
 
 ### Phase 2 — Berechnung (`heizkosten_calc.py`)
-- [ ] CSV-Ladelogik aus `immocloud_common.py` wiederverwenden
-- [ ] `calc_heating()` — Heizkosten nach HKVE
-- [ ] `calc_hotwater()` — WW-Kosten nach WWZ
-- [ ] `calc_co2()` — CO₂-Mieteranteil nach CO₂KostAufG
-- [ ] `calc_tenant_split()` — Mieterwechsel (zeitanteilig + verbrauchsbasiert)
-- [ ] Leerstandsperioden dem Vermieter zurechnen
-- [ ] Unit-Tests für alle Formeln
+- [x] CSV-Ladelogik aus `immocloud_common.py` wiederverwenden
+- [x] `calc_heating()` — Heizkosten nach HKVE
+- [x] `calc_hotwater()` — WW-Kosten nach WWZ
+- [x] `calc_co2()` — CO₂-Mieteranteil nach CO₂KostAufG
+- [x] `calc_tenant_split()` — Mieterwechsel (zeitanteilig + verbrauchsbasiert)
+- [x] Leerstandsperioden dem Vermieter zurechnen
+- [x] Unit-Tests für alle Formeln
 
 ### Phase 3 — Validierung
-- [ ] Plausibilitätsprüfungen aus Abschnitt 9
-- [ ] Kontrollausgabe: Summen = Gesamtkosten
+- [x] Plausibilitätsprüfungen aus Abschnitt 9 (Summenprüfung)
+- [x] Kontrollausgabe: Summen = Gesamtkosten
 
 ### Phase 4 — PDF-Generator (`heizkosten_pdf.py`)
 - [ ] PDF-Bibliothek auswählen (`reportlab` oder `weasyprint`)
@@ -614,10 +616,11 @@ Abrechnung rechtskonform erstellen kann:
 - [ ] Tabelle Warmwasserkosten: analog
 - [ ] CO₂-Abgabe-Zeile
 - [ ] Summenzeile Heizung + Warmwasser gesamt
-- [ ] Ausgabe: `BKA_<Jahr>_<Vorname>_<Nachname>.pdf` je Mieter
+- [ ] Ausgabe: `Heizk_<Jahr>_<Vorname>_<Nachname>.pdf` je Mieter
 
 ### Phase 5 — Übergabe an immocloud
-- [ ] `heizkosten_ergebnis.yaml` + `.csv` schreiben
+- [x] `heizkosten_ergebnis.yaml` schreiben (von `heizkosten_calc.py` erzeugt)
+- [ ] `heizkosten_ergebnis.csv` schreiben (tabellarische Zusammenfassung, Excel-lesbar)
 - [ ] Optional: Playwright-Upload als "extern berechnete Kosten"
 
 ---
@@ -638,11 +641,11 @@ reportlab    – PDF-Erzeugung (Heizkostenabrechnung je Mieter)
 
 | # | Frage | Priorität | Status |
 |---|-------|-----------|--------|
-| 1 | Wohnflächen je NE (m²) | HOCH | ✅ aus XLSX: 402,18 m² gesamt |
-| 2 | Mieterwechsel 2025 vollständig? | HOCH | ✅ NE 1 (Apr), NE 5 (3×) erkannt |
-| 3 | Gesamtkosten Heizung 2025 (Versorger-Rechnung) | HOCH | ⏳ manuell eintragen |
-| 4 | Gesamtkosten Warmwasser 2025 | HOCH | ⏳ manuell eintragen |
-| 5 | CO₂-Abgabe-Anteil aus Rechnung | MITTEL | ⏳ manuell eintragen |
-| 6 | Spezifischer CO₂-Ausstoß kg/m²/Jahr (Energieausweis) | MITTEL | ⏳ offen |
+| 1 | Wohnflächen je NE (m²) | HOCH | ✅ aus XLSX: 402,18 m² gesamt (je NE in §2.3 eingetragen) |
+| 2 | Mieterwechsel 2025 vollständig? | HOCH | ✅ NE 1 (Apr/Jul), NE 5 (3× Wechsel + Leerstand) erkannt |
+| 3 | Gesamtkosten Heizung 2025 (Versorger-Rechnung) | HOCH | ✅ 8.186,58 € Brennstoff inkl. CO₂-Abgabe (in `heizkosten_config.yaml`) |
+| 4 | Gesamtkosten Warmwasser 2025 | HOCH | ✅ WMZ-basiert berechnet: 38,91 % × 8.186,58 € = 3.185,36 € Wärmeanteil |
+| 5 | CO₂-Abgabe-Anteil aus Rechnung | MITTEL | ✅ 704,98 € (in `heizkosten_config.yaml`; Mieteranteil 35 % = 246,74 €) |
+| 6 | Spezifischer CO₂-Ausstoß kg/m²/Jahr | MITTEL | ✅ 26,78 kg/m²/Jahr aus Versorger-Rechnung (10.771,211 kg / 402,18 m²) → Stufe 22–32 → 35 % Mieteranteil |
 | 7 | WMZ-Daten für Warmwasser-Wärmeanteil | NIEDRIG | ✅ WMZ-WW (16,77 MWh) und WMZ-H (26,33 MWh) aus CSV; § 9a nicht benötigt |
-| 8 | Leerstandsperioden NE 1 (01.05.–14.07.2025) — Kosten Vermieter? | MITTEL | ⏳ offen |
+| 8 | Leerstandsperioden NE 1 (01.05.–14.07.2025) — Kosten Vermieter? | MITTEL | ✅ Ja — Grundkostenanteil anteilig dem Vermieter zugerechnet (81,97 €); implementiert in `build_periods()` |
