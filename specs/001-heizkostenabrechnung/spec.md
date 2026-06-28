@@ -31,9 +31,20 @@ Die **Heizkostenverordnung (HeizkostenV)** verpflichtet Vermieter, die Kosten f�
 |-------|--------|---------|----------|
 | Heizkostenverteiler elektronisch | HKVE | HKE (dimensionslos) | Raumheizung je Nutzeinheit |
 | Warmwasserzähler | WWZ | m³ | Warmwasserverbrauch je Nutzeinheit |
-| Kaltwasserzähler | KWZ | m³ | Kaltwasserverbrauch je Nutzeinheit |
-| Wärmemengenzähler | WMZ | MWh | Gesamtwärmeverbrauch Heizkreis |
-| FAM-Zähler (Funkablesung) | FAM (WWZ) | m³ | Warmwasser (funkbasiert) |
+| Kaltwasserzähler | KWZ | m³ | Kaltwasserverbrauch je Nutzeinheit (nur Plausibilitätsprüfung) |
+| Wärmemengenzähler Heizung | WMZ-H | MWh | Gesamtwärmeverbrauch Heizkreis (Gerät `EFE-44556666H-04`, NE 11) |
+| Wärmemengenzähler Warmwasser | WMZ-WW | MWh | Wärmeenergie für Warmwassererwärmung (Gerät `EFE-44556665H-04`, NE 10) |
+
+**Abgrenzung:** Kaltwasser wird bereits separat über immocloud abgerechnet. Dieses Tool berechnet **nur Heizung und Warmwasser** nach HeizkostenV. KWZ-Werte werden ausschließlich für die Plausibilitätsprüfung (KWZ ≥ WWZ) verwendet.
+
+**WMZ-Besonderheit:** Beide WMZ sind als "Nutzeinheit" 10 und 11 im Heizraum (1.UG) in der CSV enthalten. Sie wurden am 01.01.2025 eingebaut (kein 2024-12-31-Startwert). Die monatlichen Werte sind kumulative MWh ab Einbau:
+
+| NE | Geräte-Nr | Funktion | Jahreswert 2025-12-31 |
+|----|-----------|----------|-----------------------|
+| 10 | `EFE-44556665H-04` | WMZ Warmwasser | 16,77 MWh |
+| 11 | `EFE-44556666H-04` | WMZ Heizung | 26,33 MWh |
+
+Da beide WMZ verfügbar sind, entfällt die Schätzung nach § 9a HeizkostenV.
 
 **HKVE-Besonderheit:** Der elektronische Heizkostenverteiler misst die Heizkörperoberflächen-temperatur relativ zur Raumtemperatur und gibt dimensionslose **Heizkosteneinheiten (HKE)** aus. Der Thermomess-**Kd-Faktor** (z.B. 1,582) ist bereits in den exportierten Ablesewerten enthalten — keine manuelle Umrechnung erforderlich. Das Gerät wird nach der Jahresablesung auf 0 zurückgesetzt.
 
@@ -45,9 +56,11 @@ Die **Heizkostenverordnung (HeizkostenV)** verpflichtet Vermieter, die Kosten f�
 
 | Quelle | Inhalt | Format |
 |--------|--------|--------|
-| `Ablesewerte_*_semikolon.csv` | Monatliche Zählerstände je Gerät und Nutzeinheit | CSV, Semikolon-getrennt |
-| Heizkostenrechnung Versorger | Gesamtkosten Heizung + Warmwasser | PDF / manuell |
-| Wohnflächennachweis | m²-Fläche je Nutzeinheit | manuell |
+| `Ablesewerte_*_semikolon.csv` | Monatliche Zählerwerte je Gerät und Nutzeinheit (HKVE, WWZ, KWZ, **WMZ**) | CSV, Semikolon-getrennt |
+| Heizkostenrechnung Versorger | Gesamtkosten Heizung + Warmwasser (Brennstoff, Wartung, CO₂-Abgabe) | PDF / manuell |
+| Wohnflächennachweis | m²-Fläche je Nutzeinheit | aus XLSX |
+
+> **Hinweis:** WMZ-Werte (NE 10 und 11) stehen in derselben CSV wie HKVE/WWZ. Sie haben keinen `2024-12-31`-Anfangswert (Einbau 01.01.2025) — der Startwert ist implizit 0.
 
 ### 2.2 CSV-Struktur
 
@@ -122,7 +135,9 @@ Heizkosten_NE_i = H_grund_NE_i + H_verbrauch_NE_i
 
 Warmwasserkosten setzen sich zusammen aus:
 - **Wärmekosten** (Energie zum Erhitzen): aus WMZ oder nach § 9a berechnet
-- **Wasserkosten** (Kaltwasserpreis × Warmwasserverbrauch)
+- **Wasserkosten** (Kaltwasserpreis × Warmwasserverbrauch) — der Kaltwasserpreis für die Warmwassererwärmung ist Bestandteil der Versorgerrechnung
+
+> **Hinweis:** Der allgemeine Kaltwasserverbrauch (Trinkwasser/Abwasser) wird separat über immocloud abgerechnet und ist nicht Teil dieser Berechnung.
 
 ```
 WW_kosten_gesamt = WW_wärme + WW_wasser
@@ -171,7 +186,7 @@ Negatives Ergebnis = Guthaben.
 
 Bei Mieterwechsel innerhalb des Abrechnungsjahres:
 
-- **Verbrauchskosten**: auf Basis der Ablesungen zum Ein-/Auszugsdatum (Zwischenablesung)
+- **Verbrauchskosten**: auf Basis der Zählerstände zum Ein-/Auszugsdatum
 - **Grundkosten**: zeitanteilig (Tage Mietdauer / 365)
 - Beide Mieter erhalten separate Abrechnungen
 
@@ -183,22 +198,55 @@ H_verbrauch_Mieter_A = H_verbrauch × (HKVE_A / HKVE_gesamt)
 H_verbrauch_Mieter_B = H_verbrauch × (HKVE_B / HKVE_gesamt)
 ```
 
+### 3.6 Startwert bei untermonatlichem Einzug
+
+Wenn der Einzug nicht zum Monatsersten erfolgt (z.B. 15.07.), gibt es keinen
+Zählerstand genau zum Einzugsdatum in der CSV (Stände sind immer Monatsendwerte).
+
+**Regel:** Der Endwert des **Vormonats** gilt als Startwert für den einziehenden Mieter.
+
+```
+Beispiel: Einzug 15.07.2025
+  → Startwert HKVE = CSV-Wert 2025-06-30
+  → Startwert WWZ  = CSV-Wert 2025-06-30
+
+Verbrauch Mieter_B = Endstand 2025-12-31 − Vormonatsendstand 2025-06-30
+```
+
+Für den ausziehenden Mieter (Auszug z.B. 14.07.) gilt spiegelbildlich:
+
+```
+  → Endwert Mieter_A = CSV-Wert 2025-07-31  (Endstand des aktuellen Monats)
+  → Leerstandsperiode ab 15.07.: kein Verbrauch, kein eigener Zählerstand
+    (Grundkosten der Leerstandstage gehen an den Vermieter)
+```
+
+**Implementierungshinweis:** Die Funktion `resolve_meter_value(geraet_nr, date, csv)`
+sucht zunächst den exakten Monatsspalten-Wert. Liegt das Datum innerhalb eines Monats
+(nicht Monatsletzter), gilt:
+- **Einzug untermonatlich** → Startwert = Endstand des **Vormonats**
+- **Auszug untermonatlich** → Endwert = Endstand des **aktuellen Monats**
+
 ---
 
 ## 4. Berechnung Wärmeanteil Warmwasser (§ 9a HeizkostenV)
 
-Wenn kein separater WMZ für Warmwasser vorhanden:
+Da **beide WMZ vorhanden** sind (WMZ-H und WMZ-WW), wird der Wärmeanteil für Warmwasser direkt aus den Messwerten berechnet — keine Schätzung nach § 9a erforderlich.
 
 ```
-Q_ww = 2,5 × kWh/m³ × WWZ_verbrauch_gesamt   (Richtwert § 9a)
+Q_ww      = WMZ-WW Jahreswert (MWh)   → z.B. 16,77 MWh
+Q_heizung = WMZ-H  Jahreswert (MWh)   → z.B. 26,33 MWh
+Q_gesamt  = Q_ww + Q_heizung          → z.B. 43,10 MWh
+
+WW_wärme_anteil = Q_ww / Q_gesamt     → z.B. 38,9 %
+WW_wärme        = Heiz_Gesamtkosten × WW_wärme_anteil
+H_kosten_netto  = Heiz_Gesamtkosten × (1 − WW_wärme_anteil)
 ```
 
-Alternativ aus WMZ-Ablesung (bevorzugt, da genauer).
-
-Anteil Wärmekosten für Warmwasser am Gesamtwärmeverbrauch:
+Fallback (§ 9a, nur wenn ein WMZ defekt/fehlt):
 
 ```
-WW_wärme = Heiz_Gesamtkosten × (Q_ww / Q_gesamt)
+Q_ww = 2,5 × kWh/m³ × WWZ_verbrauch_gesamt
 ```
 
 ---
@@ -227,7 +275,7 @@ CO2_je_NE_i = CO2_mieter_anteil × (Fläche_i / Fläche_gesamt)
 
 ## 6. Anwendungsstruktur
 
-Die Applikation besteht aus **drei unabhängigen Werkzeugen**, die sequenziell ausgeführt werden:
+Die Applikation besteht aus **vier unabhängigen Werkzeugen**, die sequenziell ausgeführt werden:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -244,12 +292,19 @@ Die Applikation besteht aus **drei unabhängigen Werkzeugen**, die sequenziell a
 │    Output: heizkosten_ergebnis.yaml / .csv (je NE + Mieter) │
 └───────────────────┬─────────────────────────────────────────┘
                     │
-┌───────────────────▼─────────────────────────────────────────┐
-│ 3. heizkosten_immocloud_export.py  (optional)               │
-│    Input:  heizkosten_ergebnis.yaml                         │
-│    Output: Werte als "extern berechnete Kosten" in Immocloud│
-│            (via Playwright oder API, falls verfügbar)       │
-└─────────────────────────────────────────────────────────────┘
+         ┌──────────┴──────────┐
+         │                     │
+┌────────▼────────────┐  ┌─────▼───────────────────────────────┐
+│ 3. heizkosten_      │  │ 4. heizkosten_pdf.py                │
+│    immocloud_       │  │    Input:  heizkosten_ergebnis.yaml  │
+│    export.py        │  │    Output: BKA_<Mieter>.pdf je Mieter│
+│    Input: Ergebnis  │  │    → Versand-fertige Abrechnung      │
+│    Output: EUR-     │  │      (eigenständiges PDF, kein       │
+│    Betrag in        │  │      (nur Heizung + Warmwasser)      │
+│    immocloud als    │  └─────────────────────────────────────┘
+│    "extern ber.     │
+│    Kosten"          │
+└─────────────────────┘
 ```
 
 ### 6.1 Konfigurations-Generator (`heizkosten_config_gen.py`)
@@ -284,7 +339,7 @@ Calculator
 - CO₂-Mieteranteil (EUR)
 - **Summe Heizkosten (EUR)** — für Übergabe an immocloud als "extern berechnete Kosten"
 
-### 6.3 Ausgabe-Modul
+### 6.3 Ausgabe-Modul (`heizkosten_immocloud_export.py`)
 
 ```
 OutputModule
@@ -293,7 +348,90 @@ OutputModule
 └── render_immocloud(statements) → Vorbereitung für immocloud-Übergabe
 ```
 
-**Kein PDF-Abrechnungsdruck** — die Heizkostenabrechnung gegenüber dem Mieter erfolgt über immocloud (Nebenkostenabrechnung). Dieses Tool liefert nur die **berechneten EUR-Beträge** als Input.
+Liefert die **berechneten EUR-Beträge** (Heizung + Warmwasser je NE/Mieter) für den Upload in immocloud als "extern berechnete Kosten".
+
+### 6.4 PDF-Generator (`heizkosten_pdf.py`)
+
+Erzeugt je Mieter eine **Heizkostenabrechnung als PDF**, die direkt an den Mieter verschickt werden kann. Das PDF wird neu erstellt — das Referenzformat der bisherigen Heizkostenabrechnungen stammt von **Thermomess** (Abrechnungsdienstleister für Heizkosten/WMZ), nicht von immocloud.
+
+Das PDF orientiert sich am **Thermomess-Format** (mehrseitig). Aufbau:
+
+**Seite 1 — Kopf + Ablesewerte (je Nutzeinheit)**
+
+```
+Einzelabrechnung <ObjektNr> / <NE> — Abrechnungszeitraum 01.01.25 bis 31.12.25
+──────────────────────────────────────────────────────────────────────────────
+Absender:     Anton Frank, Loschwitzer Str. 17, 01309 Dresden
+Empfänger:    <Mietername>, Zaschendorfer Str. 20, 01662 Meißen
+Lage:         <Stockwerk, Seite>
+
+Ihre Ablesewerte — Raumwärme (HKVE)
+Raum   Seriennr.   Geräteart   Einbau      Anfang   Ablesung   Verbrauch   Kd-Fakt.   Einheiten
+BAD    29728206    SONTEX868   01.01.2025     0,00     71,00      71,00      1,582       112,32
+KÜ     29728205    …           …              …        …          …          …           …
+…
+                                                              Ihre Einheiten: xxx,xx VE
+
+Ihre Ablesewerte — Warmwasser (WWZ)
+Raum   Seriennr.   Geräteart   Einbau      Anfang   Ablesung   Verbrauch (m³)
+BAD    28818103    WWZ         01.01.2025    0,000    10,790      10,790
+                                                              Ihre Einheiten: x,xxx m³
+```
+
+**Seite 2 — Gesamtkosten der Liegenschaft + Verteilungsberechnung**
+
+```
+Gesamtkosten der Liegenschaft im Abrechnungszeitraum
+──────────────────────────────────────────────────────────────────────────────
+Energieträgerkosten
+  Gas / Brennstoff          8.186,58 €
+  Summe Heizungskosten      8.186,58 €
+
+Warmwasserzusatzkosten        0,00 €
+  (Gerätemieten und Abrechnungsdienst sind separat in der Nebenkostenabrechnung)
+
+Gesamtkosten zur Verteilung   8.186,58 €
+
+──────────────────────────────────────────────────────────────────────────────
+Trennung Raumwärme / Wassererwärmung (aus WMZ):
+  WMZ-WW: 16,77 MWh von gesamt 43,10 MWh = 38,91 %
+  Kostenanteil Wassererwärmung  = 38,91 % × x.xxx,xx € = x.xxx,xx €
+  Kostenanteil Raumwärme        = x.xxx,xx € − x.xxx,xx € = x.xxx,xx €
+
+CO₂-Abgabe (CO₂KostAufG):
+  Gesamt 704,98 € × 35 % Mieteranteil = 246,74 €  (Stufe 26,78 kg CO₂/m²/Jahr)
+
+Verteilung Raumwärme:
+  30 % Grundanteil  x.xxx,xx € ÷ 402,18 m²   = x,xxxxxx €/m²
+  70 % Verbrauch    x.xxx,xx € ÷ xxxxx,xx VE  = x,xxxxxx €/VE
+
+Verteilung Wassererwärmung:
+  30 % Grundanteil  xxx,xx € ÷ 402,18 m²     = x,xxxxxx €/m²
+  70 % Verbrauch    xxx,xx € ÷ xxx,xx m³     = xx,xxxxxx €/m³
+```
+
+**Seite 3 — Ihre Kosten (Mieteranteil)**
+
+```
+Ihre Kosten — Abrechnungszeitraum <von> bis <bis>
+──────────────────────────────────────────────────────────────────────────────
+Raumwärme
+  Grundanteil:    x,xxxxxx €/m² × xx,xx m² × (Tage/365)  =  xx,xx €
+  Verbrauchsant.: x,xxxxxx €/VE × xxx,xx VE               = xxx,xx €
+  Summe Raumwärme                                          = xxx,xx €
+
+Wassererwärmung
+  Grundanteil:    x,xxxxxx €/m² × xx,xx m² × (Tage/365)  =  xx,xx €
+  Verbrauchsant.: xx,xxxxxx €/m³ × x,xxx m³              =  xx,xx €
+  Summe Wassererwärmung                                    =  xx,xx €
+
+CO₂-Abgabe (Mieteranteil)                                 =  xx,xx €
+
+Ihre Gesamtkosten Heizung + Warmwasser                    = xxx,xx €
+──────────────────────────────────────────────────────────────────────────────
+```
+
+**Hinweis:** Das PDF enthält ausschließlich Heizung und Warmwasser. Alle anderen Betriebskosten (Kaltwasser, Gebäudeversicherung, Müll etc.) werden separat über immocloud abgerechnet und erscheinen dort in der vollständigen Nebenkostenabrechnung.
 
 ---
 
@@ -319,10 +457,17 @@ nutzeinheiten:
   "8": {name: "70 - DG rechts",   flaeche_m2: 55.0}
 
 kosten:
-  heizung_gesamt:       3850.00   # EUR inkl. CO₂-Abgabe
+  heizung_gesamt:       3850.00   # EUR inkl. CO₂-Abgabe (Versorger-Gesamtrechnung)
   co2_abgabe:            420.00   # EUR (Anteil an heizung_gesamt)
-  warmwasser_waerme:    1250.00   # EUR
-  warmwasser_wasser:     380.00   # EUR (Kaltwasserpreis × m³)
+  # WMZ-basierte Aufteilung Heizung vs. Warmwasser (aus CSV automatisch berechnet):
+  wmz_heizung_mwh:        26.33   # WMZ-H (NE 11, EFE-44556666H-04)
+  wmz_warmwasser_mwh:     16.77   # WMZ-WW (NE 10, EFE-44556665H-04)
+  # wmz_waerme_anteil_ww: 0.389   # automatisch: wmz_warmwasser / (wmz_heizung + wmz_warmwasser)
+  warmwasser_wasser:     380.00   # EUR (Kaltwasserpreis × m³ für Warmwassererwärmung, aus Versorger-Rechnung)
+
+wmz_geraete:
+  heizung:     "EFE-44556666H-04"   # NE 11 in CSV
+  warmwasser:  "EFE-44556665H-04"   # NE 10 in CSV
 
 aufteilung:
   heizung_grundkosten_pct:    30   # § 6 HeizkostenV (30–50 %)
@@ -342,12 +487,22 @@ mieter:
 
 ---
 
-## 8. Ziel-Output: Immocloud-Übergabe
+## 8. Ziel-Outputs
 
-Diese Applikation macht **keine** eigenständige Mieter-Abrechnung.
-Sie berechnet den **Heizkosten-Betrag je Nutzeinheit (und Mietperiode)**, der dann als
-"extern berechnete Kosten" in immocloud übernommen wird — dort erfolgt die eigentliche
-Nebenkostenabrechnung gegenüber dem Mieter.
+Die Applikation produziert **zwei Outputs**:
+
+### 8.1 Immocloud-Übergabe (EUR-Betrag)
+
+Der berechnete **Heizkosten-Betrag je Nutzeinheit (und Mietperiode)** wird als
+"extern berechnete Kosten" in immocloud eingetragen — dort erfolgt die vollständige
+Nebenkostenabrechnung gegenüber dem Mieter (inkl. Kaltwasser, Versicherung, etc.).
+
+### 8.2 Heizkostenabrechnung PDF (Mieterversand)
+
+Zusätzlich wird je Mieter ein PDF erzeugt (`BKA_<Jahr>_<Vorname>_<Nachname>.pdf`),
+das die **detaillierte Aufschlüsselung der Heizkosten und Warmwasserkosten** enthält
+nach den Anforderungen des § 6 Abs. 4 HeizkostenV. Dieses PDF wird direkt an den
+Mieter verschickt.
 
 **Übergabe-Format (Ergebnis je NE/Mieter):**
 
@@ -356,19 +511,43 @@ Nebenkostenabrechnung gegenüber dem Mieter.
 ergebnis:
   "1":
     name: "20 - EG links"
+    flaeche_m2: 50.40
     mieter:
-      - name:   "Jennifer Rose Gombár"
-        periode: "2025-01-01 bis 2025-04-30"
-        heizkosten_eur:    142.30
-        warmwasser_eur:     48.10
-        co2_mieter_eur:      8.20
-        summe_eur:         198.60
-      - name:   "Dirk Hamm"
-        periode: "2025-07-15 bis 2025-12-31"
-        heizkosten_eur:    168.40
-        warmwasser_eur:     57.90
-        co2_mieter_eur:      9.80
-        summe_eur:         236.10
+      - name:         "Jennifer Rose Gombár"
+        periode_von:  "2025-01-01"
+        periode_bis:  "2025-04-30"
+        tage:         120
+        hkve_einheiten: 312.5
+        wwz_m3:         2.840
+        heizung_grundkosten_eur:      28.10
+        heizung_verbrauchskosten_eur: 114.20
+        heizung_gesamt_eur:           142.30
+        warmwasser_grundkosten_eur:    14.50
+        warmwasser_verbrauchskosten_eur: 33.60
+        warmwasser_gesamt_eur:          48.10
+        co2_mieter_eur:                  8.20
+        summe_eur:                     198.60
+        pdf_datei: "BKA_2025_Jennifer_Rose_Gombar.pdf"
+      - name:         "Dirk Hamm"
+        periode_von:  "2025-07-15"
+        periode_bis:  "2025-12-31"
+        tage:         170
+        hkve_einheiten: 445.0
+        wwz_m3:         4.120
+        heizung_grundkosten_eur:      39.80
+        heizung_verbrauchskosten_eur: 128.60
+        heizung_gesamt_eur:           168.40
+        warmwasser_grundkosten_eur:    20.60
+        warmwasser_verbrauchskosten_eur: 37.30
+        warmwasser_gesamt_eur:          57.90
+        co2_mieter_eur:                  9.80
+        summe_eur:                     236.10
+        pdf_datei: "BKA_2025_Dirk_Hamm.pdf"
+    leerstand:
+      - periode_von: "2025-05-01"
+        periode_bis:  "2025-07-14"
+        tage: 75
+        kosten_vermieter_eur: 89.40   # Grundkostenanteil anteilig
 ```
 
 Leerstandsperioden (hier: 01.05.–14.07.) werden separat ausgewiesen und dem Vermieter zugerechnet.
@@ -382,7 +561,7 @@ Leerstandsperioden (hier: 01.05.–14.07.) werden separat ausgewiesen und dem Ve
 | Vollständigkeit | Alle aktiven Zähler haben Jahresendwert |
 | Plausibilität HKVE | Kein Wert > 200 % des Durchschnitts (Ausreißer) |
 | Plausibilität WWZ | Jahresverbrauch > 0 wenn Wohnung bewohnt |
-| KWZ ≥ WWZ | Kaltwasser ≥ Warmwasser je NE (physikalisch zwingend) |
+| KWZ ≥ WWZ | Kaltwasser ≥ Warmwasser je NE (physikalisch zwingend; KWZ nur für diese Prüfung) |
 | Summe Grundkostenanteile | Σ Grundkostenanteil_NE_i = 100 % (Floating-Point-tolerant) |
 | Summe Verbrauchsanteile | Σ Verbrauchsanteil_NE_i = 100 % |
 | CO₂-Aufteilung | Vermieter + Mieter = CO₂_gesamt |
@@ -428,7 +607,16 @@ Abrechnung rechtskonform erstellen kann:
 - [ ] Plausibilitätsprüfungen aus Abschnitt 9
 - [ ] Kontrollausgabe: Summen = Gesamtkosten
 
-### Phase 4 — Übergabe an immocloud
+### Phase 4 — PDF-Generator (`heizkosten_pdf.py`)
+- [ ] PDF-Bibliothek auswählen (`reportlab` oder `weasyprint`)
+- [ ] Briefkopf: Absender Anton Frank, Empfänger, Objekt, Abrechnungszeitraum
+- [ ] Tabelle Heizkosten: Grundkosten- und Verbrauchskostenanteil mit Rechenschritten
+- [ ] Tabelle Warmwasserkosten: analog
+- [ ] CO₂-Abgabe-Zeile
+- [ ] Summenzeile Heizung + Warmwasser gesamt
+- [ ] Ausgabe: `BKA_<Jahr>_<Vorname>_<Nachname>.pdf` je Mieter
+
+### Phase 5 — Übergabe an immocloud
 - [ ] `heizkosten_ergebnis.yaml` + `.csv` schreiben
 - [ ] Optional: Playwright-Upload als "extern berechnete Kosten"
 
@@ -440,6 +628,8 @@ Abrechnung rechtskonform erstellen kann:
 openpyxl     – XLSX-Import (immocloud Objektexport)
 pyyaml       – Konfigurationsdatei lesen/schreiben
 pytest       – Unit-Tests Berechnungslogik
+reportlab    – PDF-Erzeugung (Heizkostenabrechnung je Mieter)
+             – Alternativ: weasyprint (HTML → PDF, einfachere Layoutkontrolle)
 ```
 
 ---
@@ -454,5 +644,5 @@ pytest       – Unit-Tests Berechnungslogik
 | 4 | Gesamtkosten Warmwasser 2025 | HOCH | ⏳ manuell eintragen |
 | 5 | CO₂-Abgabe-Anteil aus Rechnung | MITTEL | ⏳ manuell eintragen |
 | 6 | Spezifischer CO₂-Ausstoß kg/m²/Jahr (Energieausweis) | MITTEL | ⏳ offen |
-| 7 | WMZ-Daten für Warmwasser-Wärmeanteil (statt § 9a Schätzung) | NIEDRIG | ⏳ offen |
+| 7 | WMZ-Daten für Warmwasser-Wärmeanteil | NIEDRIG | ✅ WMZ-WW (16,77 MWh) und WMZ-H (26,33 MWh) aus CSV; § 9a nicht benötigt |
 | 8 | Leerstandsperioden NE 1 (01.05.–14.07.2025) — Kosten Vermieter? | MITTEL | ⏳ offen |
