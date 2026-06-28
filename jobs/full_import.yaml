@@ -1,0 +1,50 @@
+# Vollimport: Zähler anlegen + Jahresablesungen für alle 8 Einheiten
+# Verwendung: python immocloud_session.py jobs/full_import.yaml
+
+# - action: create_meters
+#   unit: "1"
+# - action: add_readings
+#   unit: "1"
+#   dates: "2024-12-31,2025-12-31"
+
+- action: create_meters
+  unit: "2"
+- action: add_readings
+  unit: "2"
+  dates: "2024-12-31,2025-12-31"
+
+- action: create_meters
+  unit: "3"
+- action: add_readings
+  unit: "3"
+  dates: "2024-12-31,2025-12-31"
+
+- action: create_meters
+  unit: "4"
+- action: add_readings
+  unit: "4"
+  dates: "2024-12-31,2025-12-31"
+
+- action: create_meters
+  unit: "5"
+- action: add_readings
+  unit: "5"
+  dates: "2024-12-31,2025-05-31,2025-10-31,2025-12-31"
+
+- action: create_meters
+  unit: "6"
+- action: add_readings
+  unit: "6"
+  dates: "2024-12-31,2025-12-31"
+
+- action: create_meters
+  unit: "7"
+- action: add_readings
+  unit: "7"
+  dates: "2024-12-31,2025-12-31"
+
+- action: create_meters
+  unit: "8"
+- action: add_readings
+  unit: "8"
+  dates: "2024-12-31,2025-12-31"

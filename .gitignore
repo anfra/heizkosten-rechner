@@ -1,0 +1,29 @@
+# Sensible Daten — nicht in Git
+*.env
+*.env.*
+
+# Anmeldedaten und persönliche Daten
+meters_state.json
+
+# Ablesewerte-CSVs mit personenbezogenen Daten (lokal behalten)
+Ablesewerte_*.csv
+
+# immocloud-Exporte
+Immocloud_*.xlsx
+
+# Generierte Konfiguration (enthält Mieternamen)
+heizkosten_config.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# Screenshots / Fehlerlogs
+fehler_screenshot.png
