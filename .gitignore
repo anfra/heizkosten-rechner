@@ -2,17 +2,14 @@
 *.env
 *.env.*
 
-# Anmeldedaten und persönliche Daten
+# Anmeldedaten und State
 meters_state.json
 
-# Ablesewerte-CSVs mit personenbezogenen Daten (lokal behalten)
-Ablesewerte_*.csv
-
-# immocloud-Exporte
-Immocloud_*.xlsx
+# Ablesewerte-CSVs und immocloud-Exporte (exports/ Ordner, lokal behalten)
+exports/
 
 # Generierte Konfiguration (enthält Mieternamen)
-heizkosten_config.yaml
+heizkosten_rechner/heizkosten_config.yaml
 
 # Python
 __pycache__/

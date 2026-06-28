@@ -2,10 +2,10 @@
 Playwright-Skript: Zähler in immocloud anlegen.
 
 Verwendung:
-    python immocloud_create_meters.py <nutzeinheit>
-    python immocloud_create_meters.py 1 --dry-run
+    python immocloud_sync/immocloud_create_meters.py <nutzeinheit> --csv <pfad/zur/csv>
+    python immocloud_sync/immocloud_create_meters.py 1 --csv export/Ablesewerte.csv --dry-run
 
-Die angelegten Zähler-IDs werden in meters_state.json gespeichert,
+Die angelegten Zähler-IDs werden in der State-Datei gespeichert,
 damit immocloud_add_readings.py darauf zugreifen kann.
 
 Abhängigkeiten:
@@ -13,6 +13,7 @@ Abhängigkeiten:
     playwright install chromium
 """
 
+import argparse
 import asyncio
 import sys
 from pathlib import Path
@@ -174,11 +175,11 @@ async def create_meter(page: Page, meter: dict, dry_run: bool) -> Optional[str]:
 # run() – wird von immocloud_session.py aufgerufen (Browser bereits offen)
 # ---------------------------------------------------------------------------
 
-async def run(page: Page, unit_nr: str, dry_run: bool = False) -> None:
+async def run(page: Page, unit_nr: str, csv_file: Path, state_file: Path, dry_run: bool = False) -> None:
     """Legt alle Zähler einer Nutzeinheit an. Setzt einen offenen Browser voraus."""
     unit_info = UNIT_MAP[unit_nr]
 
-    meters = load_meters_for_unit(unit_nr)
+    meters = load_meters_for_unit(unit_nr, csv_file)
     if not meters:
         print("Keine aktiven Zähler in der CSV gefunden.")
         return
@@ -191,7 +192,7 @@ async def run(page: Page, unit_nr: str, dry_run: bool = False) -> None:
         print("\n[DRY-RUN] Fertig.")
         return
 
-    state = load_state()
+    state = load_state(state_file)
     if unit_nr not in state:
         state[unit_nr] = {"unit_name": unit_info["name"], "meters": []}
 
@@ -212,7 +213,7 @@ async def run(page: Page, unit_nr: str, dry_run: bool = False) -> None:
                 existing.update(entry)
             else:
                 state[unit_nr]["meters"].append(entry)
-            save_state(state)
+            save_state(state, state_file)
 
     print(f"\n✓ Zähler für Einheit {unit_nr} ({unit_info['name']}) angelegt.")
 
@@ -221,18 +222,24 @@ async def run(page: Page, unit_nr: str, dry_run: bool = False) -> None:
 # Standalone-Hauptprogramm
 # ---------------------------------------------------------------------------
 
-async def main(unit_nr: str, dry_run: bool) -> None:
+async def main(unit_nr: str, csv_file: Path, state_file: Path, dry_run: bool) -> None:
     if unit_nr not in UNIT_MAP:
         print(f"Fehler: Nutzeinheit '{unit_nr}' unbekannt. Gültig: {list(UNIT_MAP.keys())}")
+        sys.exit(1)
+
+    if not csv_file.exists():
+        print(f"Fehler: CSV-Datei nicht gefunden: {csv_file}")
         sys.exit(1)
 
     unit_info = UNIT_MAP[unit_nr]
     print("=== immocloud Zähler anlegen ===")
     print(f"Nutzeinheit: {unit_nr} → {unit_info['name']}")
+    print(f"CSV:         {csv_file}")
+    print(f"State:       {state_file}")
     if dry_run:
         print("*** DRY-RUN MODUS – keine Änderungen in immocloud ***\n")
 
-    meters = load_meters_for_unit(unit_nr)
+    meters = load_meters_for_unit(unit_nr, csv_file)
     if not meters:
         print("Keine aktiven Zähler in der CSV gefunden.")
         return
@@ -254,10 +261,10 @@ async def main(unit_nr: str, dry_run: bool) -> None:
 
         try:
             await login(page, email, password)
-            await run(page, unit_nr, dry_run)
-            print(f"\n  Nächster Schritt: python immocloud_add_readings.py {unit_nr} 2024-12-31,2025-12-31")
+            await run(page, unit_nr, csv_file, state_file, dry_run)
+            print(f"\n  Nächster Schritt: python immocloud_sync/immocloud_add_readings.py {unit_nr} 2024-12-31,2025-12-31 --csv {csv_file}")
         except Exception as e:
-            screenshot = Path(__file__).parent / "fehler_screenshot.png"
+            screenshot = Path(__file__).parent.parent / "fehler_screenshot.png"
             await page.screenshot(path=str(screenshot))
             print(f"\n✗ Fehler: {e}")
             print(f"  Screenshot: {screenshot}")
@@ -268,12 +275,16 @@ async def main(unit_nr: str, dry_run: bool) -> None:
 
 
 if __name__ == "__main__":
-    args    = [a for a in sys.argv[1:] if not a.startswith("--")]
-    dry_run = "--dry-run" in sys.argv
+    parser = argparse.ArgumentParser(
+        description="Zähler in immocloud anlegen."
+    )
+    parser.add_argument("unit", help="Nutzeinheit (1–8)")
+    parser.add_argument("--csv", required=True, type=Path,
+                        help="Pfad zur Ablesewerte-CSV")
+    parser.add_argument("--state", default="meters_state.json", type=Path,
+                        help="Pfad zur State-Datei (Standard: meters_state.json)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Keine Änderungen, nur Vorschau")
+    args = parser.parse_args()
 
-    if not args:
-        print("Verwendung: python immocloud_create_meters.py <nutzeinheit> [--dry-run]")
-        print(f"  Nutzeinheiten: {list(UNIT_MAP.keys())}")
-        sys.exit(1)
-
-    asyncio.run(main(args[0], dry_run))
+    asyncio.run(main(args.unit, args.csv, args.state, args.dry_run))

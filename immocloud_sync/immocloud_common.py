@@ -1,6 +1,8 @@
 """
 Gemeinsam genutzte Konstanten und Hilfsfunktionen für immocloud-Skripte.
 Wird von immocloud_create_meters.py und immocloud_add_readings.py importiert.
+
+Dateipfade werden als Parameter übergeben — keine hardcodierten Pfade.
 """
 
 import csv
@@ -15,11 +17,8 @@ from playwright.async_api import Page
 # Konfiguration
 # ---------------------------------------------------------------------------
 
-CSV_FILE   = Path(__file__).parent / "Ablesewerte_20260622-221802_semikolon.csv"
-STATE_FILE = Path(__file__).parent / "meters_state.json"
-
-BASE_URL   = "https://app.immocloud.de"
-OBJECT_ID  = "68f14d32f0ad0e66f8c4068f"
+BASE_URL  = "https://app.immocloud.de"
+OBJECT_ID = "68f14d32f0ad0e66f8c4068f"
 
 # Mapping CSV-Nutzeinheit (1–8) → immocloud Unit
 UNIT_MAP = {
@@ -91,10 +90,10 @@ def make_location(stockwerk: str, lage: str, raum: str) -> str:
     return " ".join(parts)
 
 
-def load_meters_for_unit(unit_nr: str) -> list:
+def load_meters_for_unit(unit_nr: str, csv_file: Path) -> list:
     """Liest die CSV und gibt aktive Zähler der angegebenen Nutzeinheit zurück."""
     meters = []
-    with open(CSV_FILE, encoding="utf-8") as f:
+    with open(csv_file, encoding="utf-8") as f:
         reader = csv.DictReader(f, delimiter=";")
         for row in reader:
             if row.get("Nutzeinheit", "").strip() != unit_nr:
@@ -130,12 +129,12 @@ def load_meters_for_unit(unit_nr: str) -> list:
     return meters
 
 
-def load_csv_value(unit_nr: str, geraet_nr: str, date_col: str) -> Optional[float]:
+def load_csv_value(unit_nr: str, geraet_nr: str, date_col: str, csv_file: Path) -> Optional[float]:
     """
     Liest den Wert einer Spalte für einen bestimmten Zähler aus der CSV.
     Gibt None zurück wenn kein/ungültiger Wert vorhanden.
     """
-    with open(CSV_FILE, encoding="utf-8") as f:
+    with open(csv_file, encoding="utf-8") as f:
         reader = csv.DictReader(f, delimiter=";")
         for row in reader:
             if row.get("Nutzeinheit", "").strip() != unit_nr:
@@ -151,7 +150,7 @@ def load_csv_value(unit_nr: str, geraet_nr: str, date_col: str) -> Optional[floa
     return None
 
 
-def load_readings_for_unit(unit_nr: str, date_columns: list) -> dict:
+def load_readings_for_unit(unit_nr: str, date_columns: list, csv_file: Path) -> dict:
     """
     Liest die CSV und gibt für jeden aktiven Zähler der Nutzeinheit die Werte
     der angegebenen Datumsspalten zurück.
@@ -160,7 +159,7 @@ def load_readings_for_unit(unit_nr: str, date_columns: list) -> dict:
         { geraet_nr: { "typ": "HKVE", "values": { "2025-04-30": 42.5, ... } }, ... }
     """
     result = {}
-    with open(CSV_FILE, encoding="utf-8") as f:
+    with open(csv_file, encoding="utf-8") as f:
         reader = csv.DictReader(f, delimiter=";")
         for row in reader:
             if row.get("Nutzeinheit", "").strip() != unit_nr:
@@ -191,19 +190,20 @@ def load_readings_for_unit(unit_nr: str, date_columns: list) -> dict:
 # State-Datei (meters_state.json)
 # ---------------------------------------------------------------------------
 
-def load_state() -> dict:
-    """Liest meters_state.json (Zähler-IDs, die Skript 1 gespeichert hat)."""
-    if STATE_FILE.exists():
-        with open(STATE_FILE, encoding="utf-8") as f:
+def load_state(state_file: Path) -> dict:
+    """Liest die State-Datei mit Zähler-IDs."""
+    if state_file.exists():
+        with open(state_file, encoding="utf-8") as f:
             return json.load(f)
     return {}
 
 
-def save_state(state: dict) -> None:
-    """Schreibt den aktuellen State nach meters_state.json."""
-    with open(STATE_FILE, "w", encoding="utf-8") as f:
+def save_state(state: dict, state_file: Path) -> None:
+    """Schreibt den aktuellen State in die State-Datei."""
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(state_file, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
-    print(f"  State gespeichert: {STATE_FILE}")
+    print(f"  State gespeichert: {state_file}")
 
 
 # ---------------------------------------------------------------------------

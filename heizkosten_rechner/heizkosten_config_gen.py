@@ -324,8 +324,8 @@ def main() -> None:
     )
     parser.add_argument("xlsx", help="Pfad zur immocloud-Exportdatei (.xlsx)")
     parser.add_argument("--jahr",  type=int, default=2025, help="Abrechnungsjahr (Standard: 2025)")
-    parser.add_argument("--csv",   default="Ablesewerte_20260622-221802_semikolon.csv",
-                        help="Dateiname der Zähler-CSV")
+    parser.add_argument("--csv",   default=None,
+                        help="Pfad zur Ablesewerte-CSV (optional, f\u00fcr sp\u00e4tere Erweiterung)")
     parser.add_argument("--out",   default="heizkosten_config.yaml",
                         help="Ausgabedatei (Standard: heizkosten_config.yaml)")
     args = parser.parse_args()

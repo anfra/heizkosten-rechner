@@ -45,12 +45,13 @@ from immocloud_common import (
 # _do_readings() – Kernlogik ohne Browser-Verwaltung
 # ---------------------------------------------------------------------------
 
-async def _do_readings(page: Page, unit_nr: str, date_columns: list) -> None:
-    """Trägt Ablesewerte ein. Setzt einen offenen Browser und geladenen State voraus."""
+async def _do_readings(page: Page, unit_nr: str, date_columns: list,
+                       csv_file: Path, state_file: Path) -> None:
+    """Trägt Ablesewerte ein. Setzt einen offenen Browser voraus."""
     unit_info    = UNIT_MAP[unit_nr]
-    state        = load_state()
+    state        = load_state(state_file)
     state_meters = state[unit_nr]["meters"]
-    readings_data = load_readings_for_unit(unit_nr, date_columns)
+    readings_data = load_readings_for_unit(unit_nr, date_columns, csv_file)
 
     for sm in state_meters:
         geraet_nr = sm["geraet_nr"]
@@ -80,18 +81,19 @@ async def _do_readings(page: Page, unit_nr: str, date_columns: list) -> None:
 # run() – wird von immocloud_session.py aufgerufen (Browser bereits offen)
 # ---------------------------------------------------------------------------
 
-async def run(page: Page, unit_nr: str, date_columns: list, dry_run: bool = False) -> None:
+async def run(page: Page, unit_nr: str, date_columns: list,
+              csv_file: Path, state_file: Path, dry_run: bool = False) -> None:
     """Trägt Ablesungen ein. Setzt einen offenen Browser voraus."""
     unit_info = UNIT_MAP[unit_nr]
 
-    state = load_state()
+    state = load_state(state_file)
     if unit_nr not in state or not state[unit_nr].get("meters"):
         raise RuntimeError(
-            f"Keine Zähler für Einheit {unit_nr} in meters_state.json.\n"
+            f"Keine Zähler für Einheit {unit_nr} in {state_file}.\n"
             f"Bitte zuerst create_meters für Einheit {unit_nr} ausführen."
         )
 
-    readings_data = load_readings_for_unit(unit_nr, date_columns)
+    readings_data = load_readings_for_unit(unit_nr, date_columns, csv_file)
 
     print(f"\nAblesungen Einheit {unit_nr} → {unit_info['name']}:")
     for sm in state[unit_nr]["meters"]:
@@ -111,14 +113,14 @@ async def run(page: Page, unit_nr: str, date_columns: list, dry_run: bool = Fals
         print("[DRY-RUN] Fertig.")
         return
 
-    await _do_readings(page, unit_nr, date_columns)
+    await _do_readings(page, unit_nr, date_columns, csv_file, state_file)
 
 
 # ---------------------------------------------------------------------------
 # Standalone-Hauptprogramm
 # ---------------------------------------------------------------------------
 
-async def main(unit_nr: str, date_columns: list, dry_run: bool) -> None:
+async def main(unit_nr: str, date_columns: list, csv_file: Path, state_file: Path, dry_run: bool) -> None:
     if unit_nr not in UNIT_MAP:
         print(f"Fehler: Nutzeinheit '{unit_nr}' unbekannt. Gültig: {list(UNIT_MAP.keys())}")
         sys.exit(1)
@@ -129,24 +131,30 @@ async def main(unit_nr: str, date_columns: list, dry_run: bool) -> None:
         print(f"  Gültige Spalten: {DATE_COLUMNS}")
         sys.exit(1)
 
+    if not csv_file.exists():
+        print(f"Fehler: CSV-Datei nicht gefunden: {csv_file}")
+        sys.exit(1)
+
     unit_info = UNIT_MAP[unit_nr]
     print("=== immocloud Ablesewerte eintragen ===")
     print(f"Nutzeinheit: {unit_nr} → {unit_info['name']}")
     print(f"Spalten:     {', '.join(date_columns)}")
     print(f"             → immocloud-Daten: {', '.join(column_to_immocloud_date(d) for d in date_columns)}")
+    print(f"CSV:         {csv_file}")
+    print(f"State:       {state_file}")
     if dry_run:
         print("*** DRY-RUN MODUS – keine Änderungen in immocloud ***\n")
 
-    state = load_state()
+    state = load_state(state_file)
     if unit_nr not in state or not state[unit_nr].get("meters"):
         print(
-            f"Fehler: Keine Zähler für Einheit {unit_nr} in meters_state.json gefunden.\n"
-            f"  Bitte zuerst immocloud_create_meters.py {unit_nr} ausführen."
+            f"Fehler: Keine Zähler für Einheit {unit_nr} in {state_file} gefunden.\n"
+            f"  Bitte zuerst immocloud_sync/immocloud_create_meters.py {unit_nr} ausführen."
         )
         sys.exit(1)
 
     # Vorschau
-    readings_data = load_readings_for_unit(unit_nr, date_columns)
+    readings_data = load_readings_for_unit(unit_nr, date_columns, csv_file)
     print(f"\nAblesungen (aus CSV):")
     for sm in state[unit_nr]["meters"]:
         geraet_nr = sm["geraet_nr"]
@@ -177,9 +185,9 @@ async def main(unit_nr: str, date_columns: list, dry_run: bool) -> None:
 
         try:
             await login(page, email, password)
-            await _do_readings(page, unit_nr, date_columns)
+            await _do_readings(page, unit_nr, date_columns, csv_file, state_file)
         except Exception as e:
-            screenshot = Path(__file__).parent / "fehler_screenshot.png"
+            screenshot = Path(__file__).parent.parent / "fehler_screenshot.png"
             await page.screenshot(path=str(screenshot))
             print(f"\n✗ Fehler: {e}")
             print(f"  Screenshot: {screenshot}")
@@ -190,17 +198,18 @@ async def main(unit_nr: str, date_columns: list, dry_run: bool) -> None:
 
 
 if __name__ == "__main__":
-    positional = [a for a in sys.argv[1:] if not a.startswith("--")]
-    dry_run    = "--dry-run" in sys.argv
+    parser = argparse.ArgumentParser(
+        description="Ablesewerte aus CSV in immocloud eintragen."
+    )
+    parser.add_argument("unit",   help="Nutzeinheit (1–8)")
+    parser.add_argument("dates",  help="Kommagetrennte Datumsspalten, z.B. 2024-12-31,2025-12-31")
+    parser.add_argument("--csv",  required=True, type=Path,
+                        help="Pfad zur Ablesewerte-CSV")
+    parser.add_argument("--state", default="meters_state.json", type=Path,
+                        help="Pfad zur State-Datei (Standard: meters_state.json)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Keine Änderungen, nur Vorschau")
+    args = parser.parse_args()
 
-    if len(positional) < 2:
-        print("Verwendung: python immocloud_add_readings.py <nutzeinheit> <datumsspalten> [--dry-run]")
-        print("  <datumsspalten>  Kommagetrennt, z.B.: 2024-12-31,2025-12-31")
-        print(f"  Nutzeinheiten:   {list(UNIT_MAP.keys())}")
-        print(f"  Gültige Spalten: {DATE_COLUMNS}")
-        sys.exit(1)
-
-    unit_nr      = positional[0]
-    date_columns = [d.strip() for d in positional[1].split(",") if d.strip()]
-
-    asyncio.run(main(unit_nr, date_columns, dry_run))
+    date_columns = [d.strip() for d in args.dates.split(",") if d.strip()]
+    asyncio.run(main(args.unit, date_columns, args.csv, args.state, args.dry_run))

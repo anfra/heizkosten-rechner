@@ -2,7 +2,7 @@
 immocloud_session.py – Mehrere Aktionen in EINEM Browser-Fenster ausführen.
 
 Verwendung:
-    python immocloud_session.py <job-datei.yaml>
+    python immocloud_sync/immocloud_session.py <job-datei.yaml> --csv <pfad/zur/csv>
 
 Job-Datei (YAML):
     - action: create_meters
@@ -12,28 +12,20 @@ Job-Datei (YAML):
       unit: "1"
       dates: "2024-12-31,2025-12-31"
 
-    - action: create_meters
-      unit: "2"
-
-    - action: add_readings
-      unit: "2"
-      dates: "2024-12-31,2025-12-31"
-
 Aktionen:
     create_meters  – Zähler anlegen (wie immocloud_create_meters.py)
     add_readings   – Ablesewerte eintragen (wie immocloud_add_readings.py)
 
 Optionen:
-    --dry-run      Keine Klicks, nur Vorschau
+    --csv      Pfad zur Ablesewerte-CSV (Pflicht)
+    --state    Pfad zur State-Datei (Standard: meters_state.json)
+    --dry-run  Keine Klicks, nur Vorschau
 
 Tipps:
-    # Alle 8 Einheiten anlegen + Jahresablesungen in einem Durchgang:
-    python immocloud_session.py jobs/full_import.yaml
-
-    # Nur Ablesungen für alle Einheiten:
-    python immocloud_session.py jobs/readings_only.yaml
+    python immocloud_sync/immocloud_session.py sync_jobs/full_import.yaml --csv export/Ablesewerte.csv
 """
 
+import argparse
 import asyncio
 import sys
 from pathlib import Path
@@ -105,9 +97,13 @@ def validate_jobs(jobs: list) -> list:
 # Hauptprogramm
 # ---------------------------------------------------------------------------
 
-async def main(job_file: Path, dry_run: bool) -> None:
+async def main(job_file: Path, csv_file: Path, state_file: Path, dry_run: bool) -> None:
     if not job_file.exists():
         print(f"Fehler: Job-Datei nicht gefunden: {job_file}")
+        sys.exit(1)
+
+    if not csv_file.exists():
+        print(f"Fehler: CSV-Datei nicht gefunden: {csv_file}")
         sys.exit(1)
 
     with open(job_file, encoding="utf-8") as f:
@@ -120,8 +116,8 @@ async def main(job_file: Path, dry_run: bool) -> None:
     jobs = validate_jobs(raw_jobs)
 
     print("=== immocloud Session ===")
-    print(f"Job-Datei: {job_file}")
-    print(f"Jobs ({len(jobs)}):")
+    print(f"Job-Datei: {job_file}")    print(f"CSV:       {csv_file}")
+    print(f"State:     {state_file}")    print(f"Jobs ({len(jobs)}):")
     for j in jobs:
         if j["action"] == "add_readings":
             print(f"  {j['action']:15s}  Einheit {j['unit']}  Spalten: {','.join(j['dates'])}")
@@ -147,16 +143,16 @@ async def main(job_file: Path, dry_run: bool) -> None:
                 print(f"{'─'*50}")
 
                 if job["action"] == "create_meters":
-                    await create_mod.run(page, job["unit"], dry_run)
+                    await create_mod.run(page, job["unit"], csv_file, state_file, dry_run)
 
                 elif job["action"] == "add_readings":
-                    await readings_mod.run(page, job["unit"], job["dates"], dry_run)
+                    await readings_mod.run(page, job["unit"], job["dates"], csv_file, state_file, dry_run)
 
             print(f"\n{'='*50}")
             print(f"✓ Session abgeschlossen. {len(jobs)} Jobs ausgeführt.")
 
         except Exception as e:
-            screenshot = Path(__file__).parent / "fehler_screenshot.png"
+            screenshot = Path(__file__).parent.parent / "fehler_screenshot.png"
             await page.screenshot(path=str(screenshot))
             print(f"\n✗ Fehler bei Job: {e}")
             print(f"  Screenshot: {screenshot}")
@@ -167,17 +163,16 @@ async def main(job_file: Path, dry_run: bool) -> None:
 
 
 if __name__ == "__main__":
-    args    = [a for a in sys.argv[1:] if not a.startswith("--")]
-    dry_run = "--dry-run" in sys.argv
+    parser = argparse.ArgumentParser(
+        description="Mehrere immocloud-Aktionen in einem Browser-Fenster ausführen."
+    )
+    parser.add_argument("jobs",    type=Path, help="YAML Job-Datei")
+    parser.add_argument("--csv",   required=True, type=Path,
+                        help="Pfad zur Ablesewerte-CSV")
+    parser.add_argument("--state", default="meters_state.json", type=Path,
+                        help="Pfad zur State-Datei (Standard: meters_state.json)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Keine Änderungen, nur Vorschau")
+    args = parser.parse_args()
 
-    if not args:
-        print("Verwendung: python immocloud_session.py <job-datei.yaml> [--dry-run]")
-        print("\nBeispiel-Job-Datei:")
-        print("  - action: create_meters")
-        print("    unit: \"1\"")
-        print("  - action: add_readings")
-        print("    unit: \"1\"")
-        print("    dates: \"2024-12-31,2025-12-31\"")
-        sys.exit(1)
-
-    asyncio.run(main(Path(args[0]), dry_run))
+    asyncio.run(main(args.jobs, args.csv, args.state, args.dry_run))
