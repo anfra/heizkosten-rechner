@@ -1,6 +1,6 @@
 # Spec 001 — Heizkostenabrechnung nach HeizkostenV
 
-**Status:** In Progress — Phase 2 + Tests abgeschlossen  
+**Status:** In Progress — Phase 2 + Tests + Phase 4 (PDF) abgeschlossen  
 **Erstellt:** 2026-06-28  
 **Objekt:** Zaschendorfer Str. 20, Meißen  
 **Abrechnungsjahr:** 2025  
@@ -609,14 +609,13 @@ Abrechnung rechtskonform erstellen kann:
 - [x] Plausibilitätsprüfungen aus Abschnitt 9 (Summenprüfung)
 - [x] Kontrollausgabe: Summen = Gesamtkosten
 
-### Phase 4 — PDF-Generator (`heizkosten_pdf.py`)
-- [ ] PDF-Bibliothek auswählen (`reportlab` oder `weasyprint`)
-- [ ] Briefkopf: Absender Anton Frank, Empfänger, Objekt, Abrechnungszeitraum
-- [ ] Tabelle Heizkosten: Grundkosten- und Verbrauchskostenanteil mit Rechenschritten
-- [ ] Tabelle Warmwasserkosten: analog
-- [ ] CO₂-Abgabe-Zeile
-- [ ] Summenzeile Heizung + Warmwasser gesamt
-- [ ] Ausgabe: `Heizk_<Jahr>_<Vorname>_<Nachname>.pdf` je Mieter
+### Phase 4 — PDF-Generator (`heizkosten_pdf.py`) ✅
+- [x] PDF-Bibliothek auswählen: `reportlab` 5.0
+- [x] Seite 1: Briefkopf Absender/Empfänger + HKVE-Gerätetabelle + WWZ-Gerätetabelle
+- [x] Seite 2: Gesamtkosten Liegenschaft, WMZ-Trennung, CO₂-Stufe, Umlagepreise
+- [x] Seite 3: Mieteranteil — Raumwärme + Wassererwärmung + CO₂ mit Rechenschritten
+- [x] Summenzeile Heizung + Warmwasser + CO₂ gesamt
+- [x] Ausgabe: `Heizk_<Jahr>_<Name>.pdf` je Mieter (11 PDFs für 2025 generiert)
 
 ### Phase 5 — Übergabe an immocloud
 - [x] `heizkosten_ergebnis.yaml` schreiben (von `heizkosten_calc.py` erzeugt)
@@ -631,8 +630,7 @@ Abrechnung rechtskonform erstellen kann:
 openpyxl     – XLSX-Import (immocloud Objektexport)
 pyyaml       – Konfigurationsdatei lesen/schreiben
 pytest       – Unit-Tests Berechnungslogik
-reportlab    – PDF-Erzeugung (Heizkostenabrechnung je Mieter)
-             – Alternativ: weasyprint (HTML → PDF, einfachere Layoutkontrolle)
+reportlab    – PDF-Erzeugung (Heizkostenabrechnung je Mieter) — verwendet
 ```
 
 ---
