@@ -353,6 +353,9 @@ def run(config_path: Path, csv_path: Path, output_path: Path) -> None:
     co2_gesamt   = kosten_cfg["co2_abgabe"]
     co2_spez     = kosten_cfg["co2_spezifisch_kg_m2"]
 
+    # CO₂-Abgabe ist in heiz_gesamt enthalten und wird über den
+    # WMZ-/HKVE-Schlüssel verteilt. Sie wird zusätzlich informatorisch
+    # als "enthaltene Kosten" ausgewiesen (nicht separat aufgeschlagen).
     ww_waerme_eur = round(heiz_gesamt * ww_anteil, 2)
     h_netto_eur   = round(heiz_gesamt - ww_waerme_eur, 2)
 
@@ -367,8 +370,11 @@ def run(config_path: Path, csv_path: Path, output_path: Path) -> None:
     ww_grund_total = round(ww_waerme_eur * ww_grund_pct, 2)
     ww_verbr_total = round(ww_waerme_eur * ww_verbr_pct, 2)
 
-    # CO₂-Mieteranteil
-    co2_rate_val     = co2_mieter_rate(co2_spez)
+    # CO₂-Mieteranteil (informatorisch) — aus Config-Override oder Stufentabelle
+    if "co2_mieter_pct" in kosten_cfg:
+        co2_rate_val = kosten_cfg["co2_mieter_pct"] / 100.0
+    else:
+        co2_rate_val = co2_mieter_rate(co2_spez)
     co2_mieter_total = round(co2_gesamt * co2_rate_val, 2)
 
     # ── Perioden aufbauen und Verbrauchswerte je Periode lesen ───────────────
@@ -449,7 +455,7 @@ def run(config_path: Path, csv_path: Path, output_path: Path) -> None:
 
             h_gesamt  = round(h_grund  + h_verbr,  2)
             ww_gesamt = round(ww_grund + ww_verbr, 2)
-            summe     = round(h_gesamt + ww_gesamt + co2_ne, 2)
+            summe     = round(h_gesamt + ww_gesamt, 2)  # CO₂ enthalten in heiz_gesamt
 
             entry: dict = {
                 "name":                           p["name"],
@@ -464,8 +470,9 @@ def run(config_path: Path, csv_path: Path, output_path: Path) -> None:
                 "warmwasser_grundkosten_eur":     ww_grund,
                 "warmwasser_verbrauchskosten_eur": ww_verbr,
                 "warmwasser_gesamt_eur":          ww_gesamt,
-                "co2_mieter_eur":                 co2_ne,
+                "co2_enthaltene_eur":             co2_ne,   # informatorisch
                 "summe_eur":                      summe,
+                "anteil_gesamt_pct":              round(summe / heiz_gesamt * 100, 2),
             }
 
             if p["is_leerstand"]:
@@ -524,7 +531,6 @@ def _check_sums(ergebnis: dict, h_grund_total: float, h_verbr_total: float,
         "h_verbr":   0.0,
         "ww_grund":  0.0,
         "ww_verbr":  0.0,
-        "co2":       0.0,
     }
     for ne_entry in ergebnis["nutzeinheiten"].values():
         for p in ne_entry.get("mieter", []) + ne_entry.get("leerstand", []):
@@ -532,7 +538,6 @@ def _check_sums(ergebnis: dict, h_grund_total: float, h_verbr_total: float,
             sums["h_verbr"]  += p["heizung_verbrauchskosten_eur"]
             sums["ww_grund"] += p["warmwasser_grundkosten_eur"]
             sums["ww_verbr"] += p["warmwasser_verbrauchskosten_eur"]
-            sums["co2"]      += p["co2_mieter_eur"]
 
     tol = 0.10  # 10-Cent-Toleranz für Rundungsdifferenzen
     checks = [
@@ -540,7 +545,6 @@ def _check_sums(ergebnis: dict, h_grund_total: float, h_verbr_total: float,
         ("H-Verbrauch",     h_verbr_total,  sums["h_verbr"]),
         ("WW-Grundkosten",  ww_grund_total, sums["ww_grund"]),
         ("WW-Verbrauch",    ww_verbr_total, sums["ww_verbr"]),
-        ("CO₂-Mieter",      co2_mieter_total, sums["co2"]),
     ]
 
     problems = []
@@ -607,7 +611,7 @@ def _print_summary(ergebnis: dict) -> None:
     summe_gesamt = round(summe_mieter + summe_leerstand, 2)
     print(f"  {'Summe Mieter':<64} {summe_mieter:>8.2f} €")
     print(f"  {'Leerstand (Vermieter)':<64} {summe_leerstand:>8.2f} €")
-    print(f"  {'Gesamt (= Heizkosten + WW + CO₂-Mieter)':<64} {summe_gesamt:>8.2f} €")
+    print(f"  {'Gesamt (= Heizkosten + WW, CO₂ enthalten)':<64} {summe_gesamt:>8.2f} €")
     print(sep)
 
 

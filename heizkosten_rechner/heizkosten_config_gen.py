@@ -211,12 +211,9 @@ def generate_config(data: dict, abrechnungsjahr: int, csv_datei: str) -> dict:
             "heizung_gesamt":        0.00,   # EUR – PFLICHTFELD: bitte ergänzen
             "co2_abgabe":            0.00,   # EUR – Anteil CO₂-Abgabe (in heizung_gesamt enthalten)
 
-            "# Warmwasser": "Energieanteil Warmwasserbereitung + Kaltwasserkosten",
-            "warmwasser_waerme":     0.00,   # EUR – aus WMZ-Ablesung oder § 9a Schätzung
-            "warmwasser_wasser":     0.00,   # EUR – Kaltwasserpreis × Warmwasserverbrauch m³
-
             "# CO2": "Spezifischer CO₂-Ausstoß des Gebäudes (bestimmt Vermieter/Mieter-Split)",
             "co2_spezifisch_kg_m2":  0.0,   # kg CO₂/m²/Jahr – aus Energieausweis oder Rechnung
+            # "co2_mieter_pct":      90,    # optionaler Override (z.B. 90 bei Denkmalschutz)
         },
 
         "aufteilung": {
@@ -295,12 +292,13 @@ def write_config(config: dict, out_path: Path) -> None:
         "  heizung_gesamt:        0.00   # EUR — PFLICHTFELD",
         "  co2_abgabe:            0.00   # EUR — Anteil CO₂-Abgabe (in heizung_gesamt enthalten)",
         "",
-        "  # Warmwasserbereitung",
-        "  warmwasser_waerme:     0.00   # EUR — aus WMZ oder § 9a HeizkostenV",
-        "  warmwasser_wasser:     0.00   # EUR — Kaltwasserpreis × WW-Verbrauch m³",
+        "  # Aufteilung Heizung vs. Warmwasser: automatisch aus WMZ berechnet",
+        "  # (warmwasser_waerme und heizung_netto sind keine manuellen Eingaben)",
         "",
         "  # CO₂-Kosten (CO₂KostAufG) — spezifischer Ausstoß für Stufentabelle",
-        "  co2_spezifisch_kg_m2:  0.0    # kg CO₂/m²/Jahr — aus Energieausweis",
+        "  co2_spezifisch_kg_m2:  0.0    # kg CO₂/m² * Jahr — aus Energieausweis",
+        "  # co2_mieter_pct: 90          # optionaler Override (z.B. 90 % bei Denkmalschutz)",
+        "  #                             # Ohne Angabe: Stufentabelle CO₂KostAufG",
         "",
         "# ─────────────────────────────────────────────────────────────────────",
         "# AUFTEILUNGSSCHLÜSSEL (§ 6 / § 8 HeizkostenV, 30–50 % Grundkosten)",

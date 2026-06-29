@@ -558,7 +558,7 @@ class TestIntegrationRun:
             for p in ne.get("mieter", []) + ne.get("leerstand", [])
         )
         erwartete_summe = (
-            meta["h_netto_eur"] + meta["ww_waerme_eur"] + meta["co2_mieter_total_eur"]
+            meta["h_netto_eur"] + meta["ww_waerme_eur"]
         )
         assert summe_alle == pytest.approx(erwartete_summe, abs=0.10)
 
@@ -598,6 +598,8 @@ class TestIntegrationRun:
             result = _yaml.safe_load(f)
 
         meta = result["meta"]
+        # CO₂ ist in heiz_gesamt enthalten und wird über WMZ verteilt.
+        # Daher gilt: h_netto + ww_waerme = heiz_gesamt
         assert meta["h_netto_eur"] + meta["ww_waerme_eur"] == pytest.approx(
             meta["heiz_gesamt_eur"], abs=0.01
         )

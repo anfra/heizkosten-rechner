@@ -165,7 +165,7 @@ def _styles() -> dict:
     }
 
 
-def _hr(width: float = PAGE_W, thickness: float = 0.5) -> HRFlowable:
+def _hr(width="100%", thickness: float = 0.5) -> HRFlowable:
     return HRFlowable(width=width, thickness=thickness, color=colors.black,
                       spaceAfter=3, spaceBefore=3)
 
@@ -250,29 +250,34 @@ def _page1(
 
     plz_ort = f"{objekt_cfg.get('plz', '')} {objekt_cfg.get('ort', '')}".strip()
     strasse = meta["adresse"]
+    von = _dt(period["periode_von"])
+    bis = _dt(period["periode_bis"])
+    heute = date.today().strftime("%d.%m.%Y")
 
-    # ── Adressblock (links: Absender, rechts: Empfänger) ──────────────────────
-    addr_data = [
-        [
-            Paragraph(f"<b>{ABSENDER['name']}</b>", st["addr"]),
-            Paragraph(f"<b>{period['name']}</b>", st["addr"]),
-        ],
-        [
-            Paragraph(ABSENDER["strasse"], st["addr"]),
-            Paragraph(strasse, st["addr"]),
-        ],
-        [
-            Paragraph(ABSENDER["plz_ort"], st["addr"]),
-            Paragraph(plz_ort, st["addr"]),
-        ],
-    ]
+    # ── Briefkopf: links Absender + Empfänger, rechts Datum + Eckdaten ───────
+    left = (
+        f"<b>{period['name']}</b><br/>"
+        f"{strasse}<br/>"
+        f"{plz_ort}"
+    )
+    right = (
+        f"Erstellt am:<br/>"
+        f"{heute}<br/>"
+        f"<br/>"
+        f"Abrechnungszeitraum:<br/>"
+        f"<b>{von}</b> bis <b>{bis}</b> ({period['tage']} Tage)<br/>"
+        f"<br/>"
+        f"Wohnfläche:<br/>"
+        f"{_de(ne_entry['flaeche_m2'])} m²"
+    )
     addr_tbl = Table(
-        addr_data,
+        [[Paragraph(left, st["addr"]), Paragraph(right, ParagraphStyle("addr_r", parent=st["addr"], alignment=2))]],  # 2=RIGHT
         colWidths=[PAGE_W * 0.48, PAGE_W * 0.52],
         hAlign="LEFT",
     )
     addr_tbl.setStyle(TableStyle([
         ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+        ("ALIGN",         (1, 0), (1, -1), "RIGHT"),
         ("LEFTPADDING",   (0, 0), (-1, -1), 0),
         ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
         ("TOPPADDING",    (0, 0), (-1, -1), 0),
@@ -281,19 +286,12 @@ def _page1(
     els.append(addr_tbl)
     els.append(Spacer(1, 0.4 * cm))
 
-    # ── Titel + Periode ────────────────────────────────────────────────────────
+    # ── Titel ─────────────────────────────────────────────────────────────────
     els.append(_hr())
     els.append(Paragraph(
         f"Heizkostenabrechnung {meta['abrechnungsjahr']}  —  "
         f"{ne_entry['name']} (NE {ne_nr})",
         st["title"],
-    ))
-    von = _dt(period["periode_von"])
-    bis = _dt(period["periode_bis"])
-    els.append(Paragraph(
-        f"Abrechnungszeitraum: <b>{von}</b> bis <b>{bis}</b>"
-        f"  ({period['tage']} Tage)  |  Wohnfläche: {_de(ne_entry['flaeche_m2'])} m²",
-        st["body"],
     ))
     els.append(_hr())
     els.append(Spacer(1, 0.3 * cm))
@@ -304,7 +302,8 @@ def _page1(
     ))
     els.append(Spacer(1, 1 * mm))
 
-    col_w = [2.4 * cm, 4.2 * cm, 1.8 * cm, 2.0 * cm, 2.0 * cm, 2.0 * cm, 2.1 * cm]
+    # 8 columns: Raum | Geräte-Nr. | Typ | Einbau | Stand Anfang | Stand Ende | Verbrauch | Einheit
+    col_w = [2.2 * cm, 3.8 * cm, 1.6 * cm, 2.0 * cm, 1.9 * cm, 1.9 * cm, 1.7 * cm, 1.4 * cm]
     hdr = [
         Paragraph("Raum",           st["tbl_hdr"]),
         Paragraph("Geräte-Nr.",     st["tbl_hdr"]),
@@ -312,18 +311,20 @@ def _page1(
         Paragraph("Einbau",         st["tbl_hdr"]),
         Paragraph("Stand Anfang",   st["tbl_hdr_r"]),
         Paragraph("Stand Ende",     st["tbl_hdr_r"]),
-        Paragraph("Einheiten",      st["tbl_hdr_r"]),
+        Paragraph("Verbrauch",      st["tbl_hdr_r"]),
+        Paragraph("Einheit",        st["tbl_hdr"]),
     ]
     rows = [hdr]
     for r in hkve_rows:
         rows.append([
-            Paragraph(r["raum"],                     st["tbl"]),
-            Paragraph(r["geraet_nr"],                st["tbl"]),
-            Paragraph(r["typ"],                      st["tbl"]),
-            Paragraph(r["einbau"],                   st["tbl"]),
-            Paragraph(_de(r["start_val"], 2),        st["tbl_r"]),
-            Paragraph(_de(r["end_val"], 2),          st["tbl_r"]),
-            Paragraph(_de(r["consumption"], 2),      st["tbl_br"]),
+            Paragraph(r["raum"],                st["tbl"]),
+            Paragraph(r["geraet_nr"],           st["tbl"]),
+            Paragraph(r["typ"],                 st["tbl"]),
+            Paragraph(r["einbau"],              st["tbl"]),
+            Paragraph(_de(r["start_val"], 2),   st["tbl_r"]),
+            Paragraph(_de(r["end_val"], 2),     st["tbl_r"]),
+            Paragraph(_de(r["consumption"], 2), st["tbl_br"]),
+            Paragraph("HKE",                    st["tbl"]),
         ])
     total_hkve = sum(r["consumption"] for r in hkve_rows)
     rows.append([
@@ -332,8 +333,9 @@ def _page1(
         Paragraph("", st["tbl"]),
         Paragraph("", st["tbl"]),
         Paragraph("", st["tbl"]),
-        Paragraph("Summe HKVE:", st["tbl_br"]),
+        Paragraph("Summe:", st["tbl_br"]),
         Paragraph(_de(total_hkve, 2), st["tbl_br"]),
+        Paragraph("HKE", st["tbl_b"]),
     ])
 
     hkve_tbl = _make_reading_table(rows, col_w)
@@ -349,24 +351,26 @@ def _page1(
     els.append(Spacer(1, 1 * mm))
 
     hdr_w = [
-        Paragraph("Raum",               st["tbl_hdr"]),
-        Paragraph("Geräte-Nr.",         st["tbl_hdr"]),
-        Paragraph("Typ",                st["tbl_hdr"]),
-        Paragraph("Einbau",             st["tbl_hdr"]),
-        Paragraph("Stand Anfang (m³)",  st["tbl_hdr_r"]),
-        Paragraph("Stand Ende (m³)",    st["tbl_hdr_r"]),
-        Paragraph("Verbrauch (m³)",     st["tbl_hdr_r"]),
+        Paragraph("Raum",           st["tbl_hdr"]),
+        Paragraph("Geräte-Nr.",     st["tbl_hdr"]),
+        Paragraph("Typ",            st["tbl_hdr"]),
+        Paragraph("Einbau",         st["tbl_hdr"]),
+        Paragraph("Stand Anfang",   st["tbl_hdr_r"]),
+        Paragraph("Stand Ende",     st["tbl_hdr_r"]),
+        Paragraph("Verbrauch",      st["tbl_hdr_r"]),
+        Paragraph("Einheit",        st["tbl_hdr"]),
     ]
     rows_w = [hdr_w]
     for r in wwz_rows:
         rows_w.append([
-            Paragraph(r["raum"],                     st["tbl"]),
-            Paragraph(r["geraet_nr"],                st["tbl"]),
-            Paragraph(r["typ"],                      st["tbl"]),
-            Paragraph(r["einbau"],                   st["tbl"]),
-            Paragraph(_de(r["start_val"], 3),        st["tbl_r"]),
-            Paragraph(_de(r["end_val"], 3),          st["tbl_r"]),
-            Paragraph(_de(r["consumption"], 3),      st["tbl_br"]),
+            Paragraph(r["raum"],                st["tbl"]),
+            Paragraph(r["geraet_nr"],           st["tbl"]),
+            Paragraph(r["typ"],                 st["tbl"]),
+            Paragraph(r["einbau"],              st["tbl"]),
+            Paragraph(_de(r["start_val"], 3),   st["tbl_r"]),
+            Paragraph(_de(r["end_val"], 3),     st["tbl_r"]),
+            Paragraph(_de(r["consumption"], 3), st["tbl_br"]),
+            Paragraph("m³",                     st["tbl"]),
         ])
     total_wwz = sum(r["consumption"] for r in wwz_rows)
     rows_w.append([
@@ -375,8 +379,9 @@ def _page1(
         Paragraph("", st["tbl"]),
         Paragraph("", st["tbl"]),
         Paragraph("", st["tbl"]),
-        Paragraph("Summe WWZ:", st["tbl_br"]),
+        Paragraph("Summe:", st["tbl_br"]),
         Paragraph(_de(total_wwz, 3), st["tbl_br"]),
+        Paragraph("m³", st["tbl_b"]),
     ])
 
     wwz_tbl = _make_reading_table(rows_w, col_w)
@@ -428,18 +433,21 @@ def _page2(st: dict, meta: dict) -> list:
     ))
     els.append(Spacer(1, 0.2 * cm))
 
-    col2 = [PAGE_W * 0.73, PAGE_W * 0.27]
+    # 3 columns: Bezeichnung | Zahlenwert (rechtsbündig) | Einheit
+    col3 = [PAGE_W * 0.65, PAGE_W * 0.20, PAGE_W * 0.15]
 
-    def row2(label: str, value: str, bold: bool = False, indent: int = 0) -> list:
+    def row3(label: str, number: str, unit: str,
+             bold: bool = False, indent: int = 0) -> list:
         l_st = ParagraphStyle(
-            f"l2_{id(label)}", parent=st["label_b" if bold else "label"],
+            f"l3_{id(label)}", parent=st["label_b" if bold else "label"],
             leftIndent=indent,
         )
         r_st = st["r_b"] if bold else st["r"]
-        return [Paragraph(label, l_st), Paragraph(value, r_st)]
+        u_st = st["label_b"] if bold else st["label"]
+        return [Paragraph(label, l_st), Paragraph(number, r_st), Paragraph(unit, u_st)]
 
     def make_section_table(data: list, shade_last: bool = False) -> Table:
-        t = Table(data, colWidths=col2, hAlign="LEFT")
+        t = Table(data, colWidths=col3, hAlign="LEFT")
         n = len(data)
         s = [
             ("VALIGN",        (0, 0), (-1, -1), "TOP"),
@@ -447,6 +455,7 @@ def _page2(st: dict, meta: dict) -> list:
             ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
             ("TOPPADDING",    (0, 0), (-1, -1), 2),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ("LEFTPADDING",   (2, 0), (2, -1),  4),
         ]
         if shade_last:
             s += [
@@ -460,8 +469,12 @@ def _page2(st: dict, meta: dict) -> list:
     # ── Energieträgerkosten ───────────────────────────────────────────────────
     els.append(Paragraph("Energieträgerkosten", st["h2"]))
     els.append(make_section_table([
-        row2("Gas / Brennstoff (inkl. CO₂-Abgabe)", _eur(meta["heiz_gesamt_eur"])),
-        row2("Summe Heizungskosten", _eur(meta["heiz_gesamt_eur"]), bold=True),
+        row3("Gas / Brennstoff (inkl. CO2-Abgabe)",
+             _de(meta["heiz_gesamt_eur"]), "€"),
+        row3("davon CO2-Abgabe (in Heizkosten enthalten)",
+             _de(meta["co2_gesamt_eur"]), "€"),
+        row3("Verteilungsmasse Raumwärme + Wassererwärmung",
+             _de(meta["heiz_gesamt_eur"]), "€", bold=True),
     ], shade_last=True))
     els.append(Spacer(1, 0.3 * cm))
 
@@ -469,37 +482,32 @@ def _page2(st: dict, meta: dict) -> list:
     els.append(Paragraph("Trennung Raumwärme / Wassererwärmung (WMZ, § 9)", st["h2"]))
     wmz_ges = meta["wmz_ww_mwh"] + meta["wmz_h_mwh"]
     els.append(make_section_table([
-        row2(
+        row3(
             f"WMZ-WW: {_mwh(meta['wmz_ww_mwh'])} von gesamt {_mwh(wmz_ges)}",
-            _pct(meta["ww_anteil_pct"]),
-            indent=8,
+            _de(meta["ww_anteil_pct"]), "%", indent=8,
         ),
-        row2(
+        row3(
             f"Kostenanteil Wassererwärmung: "
-            f"{_pct(meta['ww_anteil_pct'])} × {_eur(meta['heiz_gesamt_eur'])}",
-            _eur(meta["ww_waerme_eur"]),
-            indent=8,
+            f"{_de(meta['ww_anteil_pct'])} % × {_de(meta['heiz_gesamt_eur'])} €",
+            _de(meta["ww_waerme_eur"]), "€", indent=8,
         ),
-        row2(
+        row3(
             f"Kostenanteil Raumwärme: "
-            f"{_eur(meta['heiz_gesamt_eur'])} − {_eur(meta['ww_waerme_eur'])}",
-            _eur(meta["h_netto_eur"]),
-            bold=True,
-            indent=8,
+            f"{_de(meta['heiz_gesamt_eur'])} € − {_de(meta['ww_waerme_eur'])} €",
+            _de(meta["h_netto_eur"]), "€", indent=8,
         ),
     ]))
     els.append(Spacer(1, 0.3 * cm))
 
-    # ── CO₂-Abgabe ───────────────────────────────────────────────────────────
-    els.append(Paragraph("CO₂-Kostenaufteilung (CO₂KostAufG)", st["h2"]))
+    # ── CO2-Abgabe (informatorisch) ───────────────────────────────────────────
+    els.append(Paragraph("CO2-Abgabe (enthaltene Kosten, CO2KostAufG)", st["h2"]))
     els.append(make_section_table([
-        row2("CO₂-Abgabe gesamt", _eur(meta["co2_gesamt_eur"])),
-        row2(
-            f"Spez. CO₂-Ausstoß: {_de(meta['co2_spezifisch_kg_m2'])} kg/m²/Jahr"
+        row3("CO2-Abgabe gesamt (in Heizkosten enthalten)",
+             _de(meta["co2_gesamt_eur"]), "€"),
+        row3(
+            f"Spez. CO2-Ausstoß: {_de(meta['co2_spezifisch_kg_m2'])} kg / m² * Jahr"
             f" → Mieteranteil {meta['co2_mieter_pct']} %",
-            _eur(meta["co2_mieter_total_eur"]),
-            bold=True,
-            indent=8,
+            _de(meta["co2_mieter_total_eur"]), "€", indent=8,
         ),
     ]))
     els.append(Spacer(1, 0.3 * cm))
@@ -509,17 +517,15 @@ def _page2(st: dict, meta: dict) -> list:
     h_gp = int(round(meta["h_grund_total_eur"] / meta["h_netto_eur"] * 100))
     h_vp = 100 - h_gp
     els.append(make_section_table([
-        row2(
+        row3(
             f"{h_gp} % Grundanteil: {_eur(meta['h_grund_total_eur'])}"
             f" ÷ {_de(meta['gesamtflaeche_m2'])} m² ÷ 365 Tage",
-            f"{_de(meta['h_grund_rate_eur_m2_tag'], 6)} €/m²/Tag",
-            indent=8,
+            _de(meta["h_grund_rate_eur_m2_tag"], 6), "€ / m² / Tag", indent=8,
         ),
-        row2(
+        row3(
             f"{h_vp} % Verbrauch: {_eur(meta['h_verbr_total_eur'])}"
             f" ÷ {_de(meta['hkve_gesamt'], 1)} HKE",
-            f"{_de(meta['h_verbr_rate_eur_hke'], 6)} €/HKE",
-            indent=8,
+            _de(meta["h_verbr_rate_eur_hke"], 6), "€ / HKE", indent=8,
         ),
     ]))
     els.append(Spacer(1, 0.3 * cm))
@@ -529,17 +535,15 @@ def _page2(st: dict, meta: dict) -> list:
     ww_gp = int(round(meta["ww_grund_total_eur"] / meta["ww_waerme_eur"] * 100))
     ww_vp = 100 - ww_gp
     els.append(make_section_table([
-        row2(
+        row3(
             f"{ww_gp} % Grundanteil: {_eur(meta['ww_grund_total_eur'])}"
             f" ÷ {_de(meta['gesamtflaeche_m2'])} m² ÷ 365 Tage",
-            f"{_de(meta['ww_grund_rate_eur_m2_tag'], 6)} €/m²/Tag",
-            indent=8,
+            _de(meta["ww_grund_rate_eur_m2_tag"], 6), "€ / m² / Tag", indent=8,
         ),
-        row2(
+        row3(
             f"{ww_vp} % Verbrauch: {_eur(meta['ww_verbr_total_eur'])}"
             f" ÷ {_de(meta['wwz_gesamt_m3'], 3)} m³",
-            f"{_de(meta['ww_verbr_rate_eur_m3'], 6)} €/m³",
-            indent=8,
+            _de(meta["ww_verbr_rate_eur_m3"], 6), "€ / m³", indent=8,
         ),
     ]))
     els.append(Spacer(1, 0.3 * cm))
@@ -547,24 +551,24 @@ def _page2(st: dict, meta: dict) -> list:
     # ── Umlagepreise (Übersicht) ───────────────────────────────────────────────
     els.append(Paragraph("Umlagepreise", st["h2"]))
     rate_data = [
-        row2("Raumwärme — Grundanteil",
-             f"{_de(meta['h_grund_rate_eur_m2_tag'], 6)} €/m²/Tag"),
-        row2("Raumwärme — Verbrauch",
-             f"{_de(meta['h_verbr_rate_eur_hke'], 6)} €/HKE"),
-        row2("Wassererwärmung — Grundanteil",
-             f"{_de(meta['ww_grund_rate_eur_m2_tag'], 6)} €/m²/Tag"),
-        row2("Wassererwärmung — Verbrauch",
-             f"{_de(meta['ww_verbr_rate_eur_m3'], 6)} €/m³"),
-        row2("CO₂-Abgabe (Mieteranteil)",
-             f"{_de(meta['co2_rate_eur_m2_tag'], 6)} €/m²/Tag"),
+        row3("Raumwärme — Grundanteil",
+             _de(meta["h_grund_rate_eur_m2_tag"], 6), "€ / m² / Tag"),
+        row3("Raumwärme — Verbrauch",
+             _de(meta["h_verbr_rate_eur_hke"], 6), "€ / HKE"),
+        row3("Wassererwärmung — Grundanteil",
+             _de(meta["ww_grund_rate_eur_m2_tag"], 6), "€ / m² / Tag"),
+        row3("Wassererwärmung — Verbrauch",
+             _de(meta["ww_verbr_rate_eur_m3"], 6), "€ / m³"),
     ]
-    rate_tbl = Table(rate_data, colWidths=col2, hAlign="LEFT")
+    rate_tbl = Table(rate_data, colWidths=col3, hAlign="LEFT")
     rate_tbl.setStyle(TableStyle([
         ("BACKGROUND",   (0, 0), (-1, -1), colors.HexColor("#f5f5f5")),
         ("LINEABOVE",    (0, 0), (-1, 0),  0.5, colors.black),
         ("LINEBELOW",    (0, -1), (-1, -1), 0.5, colors.black),
         ("VALIGN",       (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 4),
+        ("LEFTPADDING",  (0, 0), (0, -1),  4),
+        ("LEFTPADDING",  (1, 0), (1, -1),  0),
+        ("LEFTPADDING",  (2, 0), (2, -1),  4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
         ("TOPPADDING",   (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING",(0, 0), (-1, -1), 2),
@@ -591,14 +595,16 @@ def _page3(st: dict, ne_entry: dict, period: dict, meta: dict) -> list:
     ))
     els.append(Spacer(1, 0.2 * cm))
 
-    col2 = [PAGE_W * 0.73, PAGE_W * 0.27]
+    # 3 columns: Bezeichnung+Formel | Zahlenwert | Einheit
+    col3 = [PAGE_W * 0.68, PAGE_W * 0.19, PAGE_W * 0.13]
 
     fl   = ne_entry["flaeche_m2"]
     tage = period["tage"]
     hkve = period["hkve_einheiten"]
     wwz  = period["wwz_m3"]
 
-    def cost_row(label: str, formula: str, amount: str, bold: bool = False) -> list:
+    def cost_row(label: str, formula: str, amount: float,
+                 bold: bool = False, unit: str = "€") -> list:
         l_st = ParagraphStyle(
             f"cr_{id(label)}", parent=st["label_b" if bold else "label"],
             leftIndent=0 if bold else 12,
@@ -610,10 +616,15 @@ def _page3(st: dict, ne_entry: dict, period: dict, meta: dict) -> list:
                 f"<font size='7.5' color='#666666'>{formula}</font>"
             )
         r_st = st["r_b"] if bold else st["r"]
-        return [Paragraph(combined, l_st), Paragraph(amount, r_st)]
+        u_st = st["label_b"] if bold else st["label"]
+        return [
+            Paragraph(combined, l_st),
+            Paragraph(_de(amount, 2), r_st),
+            Paragraph(unit, u_st),
+        ]
 
     def section_table(data: list, bold_last: bool = True) -> Table:
-        t = Table(data, colWidths=col2, hAlign="LEFT")
+        t = Table(data, colWidths=col3, hAlign="LEFT")
         n = len(data)
         s = [
             ("VALIGN",        (0, 0), (-1, -1), "TOP"),
@@ -621,6 +632,7 @@ def _page3(st: dict, ne_entry: dict, period: dict, meta: dict) -> list:
             ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
             ("TOPPADDING",    (0, 0), (-1, -1), 2),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING",   (2, 0), (2, -1),  4),
         ]
         if bold_last:
             s += [
@@ -638,18 +650,18 @@ def _page3(st: dict, ne_entry: dict, period: dict, meta: dict) -> list:
     els.append(section_table([
         cost_row(
             "Grundanteil",
-            f"{_de(m['h_grund_rate_eur_m2_tag'], 6)} €/m²/Tag"
+            f"{_de(m['h_grund_rate_eur_m2_tag'], 6)} € / m² / Tag"
             f" × {_de(fl)} m² × {tage} Tage",
-            _eur(period["heizung_grundkosten_eur"]),
+            period["heizung_grundkosten_eur"],
         ),
         cost_row(
             "Verbrauchsanteil",
-            f"{_de(m['h_verbr_rate_eur_hke'], 6)} €/HKE × {_de(hkve)} HKE",
-            _eur(period["heizung_verbrauchskosten_eur"]),
+            f"{_de(m['h_verbr_rate_eur_hke'], 6)} € / HKE × {_de(hkve)} HKE",
+            period["heizung_verbrauchskosten_eur"],
         ),
         cost_row(
             "Summe Raumwärme", "",
-            _eur(period["heizung_gesamt_eur"]),
+            period["heizung_gesamt_eur"],
             bold=True,
         ),
     ]))
@@ -660,55 +672,52 @@ def _page3(st: dict, ne_entry: dict, period: dict, meta: dict) -> list:
     els.append(section_table([
         cost_row(
             "Grundanteil",
-            f"{_de(m['ww_grund_rate_eur_m2_tag'], 6)} €/m²/Tag"
+            f"{_de(m['ww_grund_rate_eur_m2_tag'], 6)} € / m² / Tag"
             f" × {_de(fl)} m² × {tage} Tage",
-            _eur(period["warmwasser_grundkosten_eur"]),
+            period["warmwasser_grundkosten_eur"],
         ),
         cost_row(
             "Verbrauchsanteil",
-            f"{_de(m['ww_verbr_rate_eur_m3'], 6)} €/m³ × {_de(wwz, 3)} m³",
-            _eur(period["warmwasser_verbrauchskosten_eur"]),
+            f"{_de(m['ww_verbr_rate_eur_m3'], 6)} € / m³ × {_de(wwz, 3)} m³",
+            period["warmwasser_verbrauchskosten_eur"],
         ),
         cost_row(
             "Summe Wassererwärmung", "",
-            _eur(period["warmwasser_gesamt_eur"]),
+            period["warmwasser_gesamt_eur"],
             bold=True,
         ),
     ]))
     els.append(Spacer(1, 0.3 * cm))
 
-    # ── CO₂-Abgabe ───────────────────────────────────────────────────────────
-    els.append(Paragraph("CO₂-Abgabe (Mieteranteil)", st["h2"]))
-    els.append(section_table([
-        cost_row(
-            "CO₂-Abgabe",
-            f"{_de(m['co2_rate_eur_m2_tag'], 6)} €/m²/Tag"
-            f" × {_de(fl)} m² × {tage} Tage"
-            f"  ({m['co2_mieter_pct']} % Mieteranteil)",
-            _eur(period["co2_mieter_eur"]),
-        ),
-    ], bold_last=False))
+    # ── CO2-Abgabe (informatorisch) ─────────────────────────────────────────────
+    co2_enthalten = period.get("co2_enthaltene_eur", 0.0)
+    co2_info = (
+        f"In Ihren Heizkosten ist eine CO2-Abgabe von "
+        f"{_de(co2_enthalten, 2)} € enthalten "
+        f"({m['co2_mieter_pct']} % Mieteranteil bei "
+        f"{_de(m['co2_spezifisch_kg_m2'])} kg / m² * Jahr, CO2KostAufG)."
+    )
+    els.append(Paragraph(co2_info, st["small"]))
     els.append(Spacer(1, 0.4 * cm))
 
     # ── Gesamtkosten ──────────────────────────────────────────────────────────
-    HRFlowable(width=PAGE_W, thickness=1.5, color=colors.black,
-               spaceAfter=0, spaceBefore=0)
-    els.append(_hr(thickness=1.0))
-
     total_tbl = Table(
         [[
-            Paragraph("Ihre Gesamtkosten Heizung + Warmwasser + CO₂", st["total"]),
-            Paragraph(_eur(period["summe_eur"]), st["total_r"]),
+            Paragraph("Ihre Gesamtkosten Heizung + Warmwasser (inkl. CO2)", st["total"]),
+            Paragraph(_de(period["summe_eur"], 2), st["total_r"]),
+            Paragraph("€", st["total"]),
         ]],
-        colWidths=col2,
+        colWidths=col3,
         hAlign="LEFT",
     )
     total_tbl.setStyle(TableStyle([
         ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+        ("LEFTPADDING",   (2, 0), (2, -1),  4),
         ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
         ("TOPPADDING",    (0, 0), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LINEABOVE",     (0, 0), (-1, -1), 1.0, colors.black),
         ("LINEBELOW",     (0, 0), (-1, -1), 1.0, colors.black),
     ]))
     els.append(total_tbl)
