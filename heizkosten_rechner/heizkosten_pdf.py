@@ -213,6 +213,8 @@ def _device_rows(
 
         end_val = (csv.get(ne_nr, g, end_col) or 0.0) if end_col else 0.0
 
+        kd  = meta.get("kd_faktor", 1.0)
+        raw = max(0.0, end_val - start_val)
         row = {
             "raum":        RAUM_LANG.get(meta["raum"], meta["raum"]),
             "geraet_nr":   g,
@@ -220,7 +222,8 @@ def _device_rows(
             "einbau":      _dt(meta["einbau"]) if meta["einbau"] else "—",
             "start_val":   start_val,
             "end_val":     end_val,
-            "consumption": max(0.0, end_val - start_val),
+            "kd_faktor":   kd,
+            "consumption": raw * kd if is_hkve else raw,
         }
         if is_hkve:
             hkve_rows.append(row)
@@ -302,29 +305,29 @@ def _page1(
     ))
     els.append(Spacer(1, 1 * mm))
 
-    # 8 columns: Raum | Geräte-Nr. | Typ | Einbau | Stand Anfang | Stand Ende | Verbrauch | Einheit
-    col_w = [2.2 * cm, 3.8 * cm, 1.6 * cm, 2.0 * cm, 1.9 * cm, 1.9 * cm, 1.7 * cm, 1.4 * cm]
+    # 8 columns: Raum | Geräte-Nr. | Typ | Ablesung Anfang | Ablesung Ende | Kd-Faktor | Verbrauch (HKE) | Einheit
+    col_w = [2.2 * cm, 3.8 * cm, 1.4 * cm, 2.0 * cm, 2.0 * cm, 1.7 * cm, 2.1 * cm, 1.4 * cm]
     hdr = [
-        Paragraph("Raum",           st["tbl_hdr"]),
-        Paragraph("Geräte-Nr.",     st["tbl_hdr"]),
-        Paragraph("Typ",            st["tbl_hdr"]),
-        Paragraph("Einbau",         st["tbl_hdr"]),
-        Paragraph("Stand Anfang",   st["tbl_hdr_r"]),
-        Paragraph("Stand Ende",     st["tbl_hdr_r"]),
-        Paragraph("Verbrauch",      st["tbl_hdr_r"]),
-        Paragraph("Einheit",        st["tbl_hdr"]),
+        Paragraph("Raum",              st["tbl_hdr"]),
+        Paragraph("Geräte-Nr.",        st["tbl_hdr"]),
+        Paragraph("Typ",               st["tbl_hdr"]),
+        Paragraph("Ablesung<br/>Anfang", st["tbl_hdr_r"]),
+        Paragraph("Ablesung<br/>Ende",  st["tbl_hdr_r"]),
+        Paragraph("Kd-<br/>Faktor",    st["tbl_hdr_r"]),
+        Paragraph("Verbrauch<br/>(HKE)", st["tbl_hdr_r"]),
+        Paragraph("Einheit",           st["tbl_hdr"]),
     ]
     rows = [hdr]
     for r in hkve_rows:
         rows.append([
-            Paragraph(r["raum"],                st["tbl"]),
-            Paragraph(r["geraet_nr"],           st["tbl"]),
-            Paragraph(r["typ"],                 st["tbl"]),
-            Paragraph(r["einbau"],              st["tbl"]),
-            Paragraph(_de(r["start_val"], 2),   st["tbl_r"]),
-            Paragraph(_de(r["end_val"], 2),     st["tbl_r"]),
-            Paragraph(_de(r["consumption"], 2), st["tbl_br"]),
-            Paragraph("HKE",                    st["tbl"]),
+            Paragraph(r["raum"],                         st["tbl"]),
+            Paragraph(r["geraet_nr"],                    st["tbl"]),
+            Paragraph(r["typ"],                          st["tbl"]),
+            Paragraph(_de(r["start_val"], 2),            st["tbl_r"]),
+            Paragraph(_de(r["end_val"], 2),              st["tbl_r"]),
+            Paragraph(_de(r["kd_faktor"], 3),            st["tbl_r"]),
+            Paragraph(_de(r["consumption"], 2),          st["tbl_br"]),
+            Paragraph("HKE",                             st["tbl"]),
         ])
     total_hkve = sum(r["consumption"] for r in hkve_rows)
     rows.append([
@@ -332,8 +335,8 @@ def _page1(
         Paragraph("", st["tbl"]),
         Paragraph("", st["tbl"]),
         Paragraph("", st["tbl"]),
-        Paragraph("", st["tbl"]),
         Paragraph("Summe:", st["tbl_br"]),
+        Paragraph("", st["tbl"]),
         Paragraph(_de(total_hkve, 2), st["tbl_br"]),
         Paragraph("HKE", st["tbl_b"]),
     ])
@@ -350,11 +353,11 @@ def _page1(
     ))
     els.append(Spacer(1, 1 * mm))
 
+    col_w_w = [2.2 * cm, 3.8 * cm, 1.4 * cm, 2.3 * cm, 2.3 * cm, 2.2 * cm, 1.4 * cm]
     hdr_w = [
         Paragraph("Raum",           st["tbl_hdr"]),
         Paragraph("Geräte-Nr.",     st["tbl_hdr"]),
         Paragraph("Typ",            st["tbl_hdr"]),
-        Paragraph("Einbau",         st["tbl_hdr"]),
         Paragraph("Stand Anfang",   st["tbl_hdr_r"]),
         Paragraph("Stand Ende",     st["tbl_hdr_r"]),
         Paragraph("Verbrauch",      st["tbl_hdr_r"]),
@@ -366,7 +369,6 @@ def _page1(
             Paragraph(r["raum"],                st["tbl"]),
             Paragraph(r["geraet_nr"],           st["tbl"]),
             Paragraph(r["typ"],                 st["tbl"]),
-            Paragraph(r["einbau"],              st["tbl"]),
             Paragraph(_de(r["start_val"], 3),   st["tbl_r"]),
             Paragraph(_de(r["end_val"], 3),     st["tbl_r"]),
             Paragraph(_de(r["consumption"], 3), st["tbl_br"]),
@@ -378,20 +380,19 @@ def _page1(
         Paragraph("", st["tbl"]),
         Paragraph("", st["tbl"]),
         Paragraph("", st["tbl"]),
-        Paragraph("", st["tbl"]),
         Paragraph("Summe:", st["tbl_br"]),
         Paragraph(_de(total_wwz, 3), st["tbl_br"]),
         Paragraph("m³", st["tbl_b"]),
     ])
 
-    wwz_tbl = _make_reading_table(rows_w, col_w)
+    wwz_tbl = _make_reading_table(rows_w, col_w_w)
     els.append(wwz_tbl)
     if not wwz_rows:
         els.append(Paragraph("Keine WWZ-Daten für diesen Zeitraum.", st["small"]))
 
     els.append(Spacer(1, 0.3 * cm))
     els.append(Paragraph(
-        "* HKVE-Werte enthalten den gerätespezifischen Kd-Faktor (von Thermomess vorverarbeitet).",
+        "* Verbrauch (HKE) = Ablesung Ende × Kd-Faktor (gerätespezifische Gerätekonstante).",
         st["sep"],
     ))
 

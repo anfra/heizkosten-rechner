@@ -46,7 +46,7 @@ Die **Heizkostenverordnung (HeizkostenV)** verpflichtet Vermieter, die Kosten f�
 
 Da beide WMZ verfügbar sind, entfällt die Schätzung nach § 9a HeizkostenV.
 
-**HKVE-Besonderheit:** Der elektronische Heizkostenverteiler misst die Heizkörperoberflächen-temperatur relativ zur Raumtemperatur und gibt dimensionslose **Heizkosteneinheiten (HKE)** aus. Der Thermomess-**Kd-Faktor** (z.B. 1,582) ist bereits in den exportierten Ablesewerten enthalten — keine manuelle Umrechnung erforderlich. Das Gerät wird nach der Jahresablesung auf 0 zurückgesetzt.
+**HKVE-Besonderheit:** Der elektronische Heizkostenverteiler misst die Heizkörperoberflächen-temperatur relativ zur Raumtemperatur und gibt dimensionslose **Heizkosteneinheiten (HKE)** aus. Der Thermomess-**Kd-Faktor** (Gerätekonstante, z.B. 1,582) ist **nicht** im CSV-Export enthalten und muss manuell aus der Webansicht des Portals extrahiert und dem CSV hinzugefügt werden (→ Spec 002). Erst dann liefert `heizkosten_calc.py` korrekte Verbrauchseinheiten. Das Gerät wird nach der Jahresablesung auf 0 zurückgesetzt.
 
 ---
 

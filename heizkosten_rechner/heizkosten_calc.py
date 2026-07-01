@@ -168,16 +168,30 @@ class CsvData:
                     else:
                         values[col] = None
 
+                # Kd-Faktor (Gerätekonstante) aus Spalte "Kd-Faktor" lesen.
+                # Falls die Spalte fehlt oder "?" enthält, wird 1.0 (keine Korrektur) angenommen.
+                kd_raw = row.get("Kd-Faktor", "").strip()
+                try:
+                    kd_faktor = float(kd_raw) if kd_raw and kd_raw != "?" else 1.0
+                except ValueError:
+                    kd_faktor = 1.0
+
                 self._values[key] = values
                 self._meta[key] = {
-                    "typ":    typ,
-                    "einbau": einbau,
-                    "ausbau": ausbau,
-                    "raum":   raum,
+                    "typ":      typ,
+                    "einbau":   einbau,
+                    "ausbau":   ausbau,
+                    "raum":     raum,
+                    "kd_faktor": kd_faktor,
                 }
 
     def get(self, unit_nr: str, geraet_nr: str, col: str) -> Optional[float]:
         return self._values.get((unit_nr, geraet_nr), {}).get(col)
+
+    def get_kd_faktor(self, unit_nr: str, geraet_nr: str) -> float:
+        """Gibt den Kd-Faktor (Gerätekonstante) für ein HKVE-Gerät zurück.
+        Fallback 1.0 wenn nicht definiert (keine Korrektur)."""
+        return self._meta.get((unit_nr, geraet_nr), {}).get("kd_faktor", 1.0)
 
     def meters_for_unit(self, unit_nr: str, typen: set) -> list[str]:
         """Gibt Geräte-Nummern für unit_nr und einen Satz von Typen zurück.
@@ -208,6 +222,8 @@ def device_consumption(
       Das Gerät wird nach der Jahresablesung auf 0 zurückgesetzt.
       → Der 2024-12-31-Wert ist der Vorjahresstand VOR Reset; Startwert 2025 = 0.
       → Wenn start_col == "2024-12-31", wird der Startwert als 0 behandelt.
+      → Raw-Verbrauch wird mit dem Kd-Faktor (Gerätekonstante) multipliziert,
+        sofern eine "Kd-Faktor"-Spalte im CSV enthalten ist (Wert != 1.0).
 
     WWZ/WMZ:
       Kumulativer Zähler. Neu eingebaute Geräte (2025-01-01) haben keinen
@@ -226,7 +242,13 @@ def device_consumption(
     else:
         start_val = csv.get(unit_nr, geraet_nr, start_col) or 0.0
 
-    return max(0.0, end_val - start_val)
+    raw_consumption = max(0.0, end_val - start_val)
+
+    if is_hkve:
+        kd = csv.get_kd_faktor(unit_nr, geraet_nr)
+        return raw_consumption * kd
+
+    return raw_consumption
 
 
 def unit_hkve_consumption(csv: CsvData, unit_nr: str, start: date, end: date) -> float:
@@ -247,6 +269,35 @@ def unit_wwz_consumption(csv: CsvData, unit_nr: str, start: date, end: date) -> 
     for g in csv.meters_for_unit(unit_nr, WWZ_TYPEN):
         total += device_consumption(csv, unit_nr, g, start_col, end_col, is_hkve=False)
     return round(total, 3)
+
+
+def unit_hkve_geraete(csv: CsvData, unit_nr: str, start: date, end: date) -> list[dict]:
+    """
+    Gibt je HKVE-Gerät einer NE ein Dict mit Ablese- und Kd-Faktor-Details zurück.
+    Wird für die YAML- und PDF-Ausgabe verwendet.
+    """
+    start_col = resolve_start_col(start)
+    end_col   = resolve_end_col(end)
+    rows = []
+    for g in csv.meters_for_unit(unit_nr, HKVE_TYPEN):
+        meta = csv._meta.get((unit_nr, g), {})
+        if start_col == "2024-12-31":
+            start_val = 0.0
+        else:
+            start_val = csv.get(unit_nr, g, start_col) or 0.0
+        end_val = (csv.get(unit_nr, g, end_col) or 0.0) if end_col else 0.0
+        kd = csv.get_kd_faktor(unit_nr, g)
+        raw = max(0.0, end_val - start_val)
+        rows.append({
+            "raum":         meta.get("raum", ""),
+            "geraet_nr":    g,
+            "ablese_start": round(start_val, 2),
+            "ablese_ende":  round(end_val, 2),
+            "kd_faktor":    kd,
+            "verbrauch_hke": round(raw * kd, 2),
+        })
+    rows.sort(key=lambda r: r["raum"])
+    return rows
 
 
 def wmz_jahreswert(csv: CsvData, ne_nr: str, geraet_nr: str) -> float:
@@ -385,6 +436,7 @@ def run(config_path: Path, csv_path: Path, output_path: Path) -> None:
             p["hkve"] = unit_hkve_consumption(csv, ne_nr, p["start"], p["end"])
             p["wwz"]  = unit_wwz_consumption(csv, ne_nr, p["start"], p["end"])
             p["tage"] = period_days(p["start"], p["end"])
+            p["hkve_geraete"] = unit_hkve_geraete(csv, ne_nr, p["start"], p["end"])
         ne_perioden[ne_nr] = periods
 
     # ── Globale Verbrauchssummen (Nenner für Verbrauchskostensätze) ──────────
@@ -463,6 +515,7 @@ def run(config_path: Path, csv_path: Path, output_path: Path) -> None:
                 "periode_bis":                    p["end"].isoformat(),
                 "tage":                           tage,
                 "hkve_einheiten":                 hkve,
+                "hkve_geraete":                   p["hkve_geraete"],
                 "wwz_m3":                         wwz,
                 "heizung_grundkosten_eur":        h_grund,
                 "heizung_verbrauchskosten_eur":   h_verbr,
